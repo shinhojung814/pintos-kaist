@@ -91,6 +91,7 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
+	int64_t wakeup_time;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
@@ -114,33 +115,38 @@ struct thread {
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
-void thread_init (void);
-void thread_start (void);
+void thread_init(void);
+void thread_start(void);
 
-void thread_tick (void);
-void thread_print_stats (void);
+void thread_tick(void);
+void thread_print_stats(void);
 
-typedef void thread_func (void *aux);
-tid_t thread_create (const char *name, int priority, thread_func *, void *);
+typedef void thread_func(void *aux);
+tid_t thread_create(const char *name, int priority, thread_func *, void *);
 
-void thread_block (void);
-void thread_unblock (struct thread *);
+void thread_block(void);
+void thread_unblock(struct thread *);
 
-struct thread *thread_current (void);
-tid_t thread_tid (void);
-const char *thread_name (void);
+struct thread *thread_current(void);
+tid_t thread_tid(void);
+const char *thread_name(void);
 
-void thread_exit (void) NO_RETURN;
-void thread_yield (void);
+void thread_exit(void) NO_RETURN;
+void thread_yield(void);
 
-int thread_get_priority (void);
-void thread_set_priority (int);
+int thread_get_priority(void);
+void thread_set_priority(int);
 
-int thread_get_nice (void);
-void thread_set_nice (int);
-int thread_get_recent_cpu (void);
-int thread_get_load_avg (void);
+int thread_get_nice(void);
+void thread_set_nice(int);
+int thread_get_recent_cpu(void);
+int thread_get_load_avg(void);
 
-void do_iret (struct intr_frame *tf);
+void do_iret(struct intr_frame *tf);
+
+int64_t get_next_wakeup(void);
+void update_next_wakeup(int64_t ticks);
+void thread_sleep(int64_t ticks);
+void thread_wakeup(int64_t);
 
 #endif /* threads/thread.h */
