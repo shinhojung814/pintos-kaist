@@ -66,6 +66,9 @@ static tid_t allocate_tid (void);
 static struct list sleep_list;
 static int64_t next_wakeup;
 
+bool thread_compare_priority (struct list_elem *l, struct list_elem *s, void *aux);
+void thread_test_preemption(void);
+
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t) -> magic == THREAD_MAGIC)
 
@@ -208,6 +211,7 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
 
 	/* Add to run queue. */
 	thread_unblock(t);
+	thread_test_preemption();
 
 	return tid;
 }
@@ -239,9 +243,10 @@ void thread_unblock(struct thread *t) {
 
 	ASSERT(is_thread (t));
 
-	old_level = intr_disable ();
+	old_level = intr_disable();
 	ASSERT (t -> status == THREAD_BLOCKED);
-	list_push_back(&ready_list, &t -> elem);
+	// list_push_back(&ready_list, &t -> elem);
+	list_insert_ordered(&ready_list, &t -> elem, thread_compare_priority, 0);
 	t -> status = THREAD_READY;
 	intr_set_level(old_level);
 }
@@ -291,7 +296,7 @@ void thread_exit(void) {
 /* Yields the CPU. The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
 void thread_yield(void) {
-	struct thread *curr = thread_current ();
+	struct thread *curr = thread_current();
 	enum intr_level old_level;
 
 	ASSERT (!intr_context());
@@ -299,7 +304,7 @@ void thread_yield(void) {
 	old_level = intr_disable();
 
 	if (curr != idle_thread)
-		list_push_back(&ready_list, &curr -> elem);
+		list_insert_ordered(&ready_list, &curr -> elem, thread_compare_priority, 0);
 	
 	do_schedule(THREAD_READY);
 	intr_set_level(old_level);
@@ -308,6 +313,7 @@ void thread_yield(void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) {
 	thread_current() -> priority = new_priority;
+	thread_test_preemption();
 }
 
 /* Returns the current thread's priority. */
@@ -527,15 +533,22 @@ static void do_schedule(int status) {
 static void schedule(void) {
 	struct thread *curr = running_thread();
 	struct thread *next = next_thread_to_run();
+	struct thread *prev = NULL;
 
 	ASSERT (intr_get_level() == INTR_OFF);
 	ASSERT (curr -> status != THREAD_RUNNING);
-	ASSERT (is_thread (next));
+	ASSERT (is_thread(next));
+
+	if (curr != next)
+		prev = switch_threads(curr, next);
+	thread_schedule_tail(prev);
+
 	/* Mark us as running. */
 	next -> status = THREAD_RUNNING;
 
 	/* Start new time slice. */
 	thread_ticks = 0;
+	// thread_schedule_tail(prev);
 
 #ifdef USERPROG
 	/* Activate the new address space. */
@@ -617,4 +630,14 @@ void thread_wakeup(int64_t wakeup_time) {
 			update_next_wakeup(t -> wakeup_time);
 		}
 	}
+}
+
+bool thread_compare_priority (struct list_elem *l, struct list_elem *s, void *aux) {
+	return list_entry(l, struct thread, elem) -> priority > list_entry(s, struct thread, elem) -> priority;
+}
+
+void thread_test_preemption(void) {
+	if (!list_empty(&ready_list) && thread_current() -> priority <
+		list_entry(list_front(&ready_list), struct thread, elem) -> priority)
+		thread_yield();
 }
