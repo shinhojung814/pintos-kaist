@@ -54,7 +54,15 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
+void thread_init(void);
+
 static void kernel_thread(thread_func *, void *aux);
+void thread_start(void);
+void thread_tick(void);
+void thread_print_stats(void);
+
+tid_t thread_create(const char *name, int priority, thread_func *function, void *aux);
+void thread_block(void);
 
 static void idle(void *aux UNUSED);
 static struct thread *next_thread_to_run(void);
@@ -163,8 +171,7 @@ void thread_tick(void) {
 
 /* Prints thread statistics. */
 void thread_print_stats(void) {
-	printf("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n",
-			idle_ticks, kernel_ticks, user_ticks);
+	printf("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n", idle_ticks, kernel_ticks, user_ticks);
 }
 
 /* Creates a new kernel thread named NAME with the given initial
