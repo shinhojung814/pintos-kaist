@@ -533,15 +533,10 @@ static void do_schedule(int status) {
 static void schedule(void) {
 	struct thread *curr = running_thread();
 	struct thread *next = next_thread_to_run();
-	struct thread *prev = NULL;
 
 	ASSERT (intr_get_level() == INTR_OFF);
 	ASSERT (curr -> status != THREAD_RUNNING);
 	ASSERT (is_thread(next));
-
-	if (curr != next)
-		prev = switch_threads(curr, next);
-	thread_schedule_tail(prev);
 
 	/* Mark us as running. */
 	next -> status = THREAD_RUNNING;

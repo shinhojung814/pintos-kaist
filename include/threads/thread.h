@@ -149,4 +149,7 @@ void update_next_wakeup(int64_t ticks);
 void thread_sleep(int64_t ticks);
 void thread_wakeup(int64_t);
 
+bool thread_compare_priority (struct list_elem *l, struct list_elem *s, void *aux);
+void thread_test_preemption(void);
+
 #endif /* threads/thread.h */
