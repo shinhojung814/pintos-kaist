@@ -539,10 +539,15 @@ static void do_schedule(int status) {
 static void schedule(void) {
 	struct thread *curr = running_thread();
 	struct thread *next = next_thread_to_run();
+	// struct thread *prev = NULL;
 
 	ASSERT (intr_get_level() == INTR_OFF);
 	ASSERT (curr -> status != THREAD_RUNNING);
 	ASSERT (is_thread(next));
+
+	// if (curr != next)
+	// 	prev = switch_threads(curr, next);
+	// thread_schedule_tail(prev);
 
 	/* Mark us as running. */
 	next -> status = THREAD_RUNNING;
@@ -601,31 +606,39 @@ void thread_sleep(int64_t ticks) {
 	
 	old_level = intr_disable();
 	curr = thread_current();
+
 	ASSERT (curr != idle_thread);
 
-	update_next_wakeup(curr -> wakeup_time = ticks);
+	curr -> wakeup_time = ticks;
 	list_push_back(&sleep_list, &curr -> elem);
 	thread_block();
+	
 	intr_set_level(old_level);
+
+	// update_next_wakeup(curr -> wakeup_time = ticks);
+	// list_push_back(&sleep_list, &curr -> elem);
+	// thread_block();
+	// intr_set_level(old_level);
 }
 
 void thread_wakeup(int64_t wakeup_time) {
 	struct list_elem *e;
 
-	next_wakeup = INT64_MAX;
+	// next_wakeup = INT64_MAX;
 	e = list_begin(&sleep_list);
 
 	while (e != list_end(&sleep_list)) {
 		struct thread *t = list_entry(e, struct thread, elem);
 
 		if (wakeup_time >= t -> wakeup_time) {
-			e = list_remove(&t -> elem);
+			// e = list_remove(&t -> elem);
+			e = list_remove(e);
 			thread_unblock(t);
 		}
 
 		else {
 			e = list_next(e);
-			update_next_wakeup(t -> wakeup_time);
+			// update_next_wakeup(t -> wakeup_time);
 		}
 	}
 }
