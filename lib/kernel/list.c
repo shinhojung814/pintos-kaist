@@ -61,15 +61,15 @@ void list_init(struct list *list) {
 /* Returns the beginning of LIST.  */
 struct list_elem *list_begin(struct list *list) {
 	ASSERT (list != NULL);
-	return list->head.next;
+	return list -> head.next;
 }
 
 /* Returns the element after ELEM in its list.  If ELEM is the
    last element in its list, returns the list tail.  Results are
    undefined if ELEM is itself a list tail. */
-struct list_elem *list_next (struct list_elem *elem) {
+struct list_elem *list_next(struct list_elem *elem) {
 	ASSERT (is_head (elem) || is_interior (elem));
-	return elem->next;
+	return elem -> next;
 }
 
 /* Returns LIST's tail.

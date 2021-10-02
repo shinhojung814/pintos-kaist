@@ -202,7 +202,7 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
 		return TID_ERROR;
 
 	/* Initialize thread. */
-	init_thread (t, name, priority);
+	init_thread(t, name, priority);
 	tid = t -> tid = allocate_tid();
 
 	/* Call the kernel_thread if it scheduled.
@@ -248,11 +248,10 @@ void thread_block(void) {
 void thread_unblock(struct thread *t) {
 	enum intr_level old_level;
 
-	ASSERT(is_thread (t));
-
+	ASSERT(is_thread(t));
 	old_level = intr_disable();
+
 	ASSERT (t -> status == THREAD_BLOCKED);
-	// list_push_back(&ready_list, &t -> elem);
 	list_insert_ordered(&ready_list, &t -> elem, thread_compare_priority, 0);
 	t -> status = THREAD_READY;
 	intr_set_level(old_level);
@@ -287,7 +286,7 @@ tid_t thread_tid(void) {
 
 /* Deschedules the current thread and destroys it. Never returns to the caller. */
 void thread_exit(void) {
-	ASSERT (!intr_context ());
+	ASSERT (!intr_context());
 
 #ifdef USERPROG
 	process_exit ();
@@ -601,15 +600,12 @@ void thread_sleep(int64_t ticks) {
 	enum intr_level old_level;
 	
 	old_level = intr_disable();
-
 	curr = thread_current();
 	ASSERT (curr != idle_thread);
+
 	update_next_wakeup(curr -> wakeup_time = ticks);
-
 	list_push_back(&sleep_list, &curr -> elem);
-
 	thread_block();
-
 	intr_set_level(old_level);
 }
 
@@ -639,7 +635,6 @@ bool thread_compare_priority (struct list_elem *l, struct list_elem *s, void *au
 }
 
 void thread_test_preemption(void) {
-	if (!list_empty(&ready_list) && thread_current() -> priority <
-		list_entry(list_front(&ready_list), struct thread, elem) -> priority)
+	if (!list_empty(&ready_list) && thread_current() -> priority < list_entry(list_front(&ready_list), struct thread, elem) -> priority)
 		thread_yield();
 }
