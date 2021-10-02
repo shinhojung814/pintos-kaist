@@ -144,12 +144,10 @@ int thread_get_load_avg(void);
 
 void do_iret(struct intr_frame *tf);
 
-int64_t get_next_wakeup(void);
-void update_next_wakeup(int64_t ticks);
 void thread_sleep(int64_t ticks);
 void thread_wakeup(int64_t ticks);
 
-bool thread_compare_priority (struct list_elem *l, struct list_elem *s, void *aux);
+bool thread_compare_priority (struct list_elem *l, struct list_elem *s, void *aux UNUSED);
 void thread_test_preemption(void);
 
 #endif /* threads/thread.h */

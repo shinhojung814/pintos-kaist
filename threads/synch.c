@@ -71,7 +71,7 @@ bool sema_compare_priority(const struct list_elem *l, const struct list_elem *s,
 void sema_init (struct semaphore *sema, unsigned value) {
 	ASSERT (sema != NULL);
 
-	sema->value = value;
+	sema -> value = value;
 	list_init (&sema -> waiters);
 }
 
@@ -137,9 +137,10 @@ void sema_up(struct semaphore *sema) {
 
 	old_level = intr_disable();
 
-	if (!list_empty(&sema -> waiters))
-		// list_sort(&sema -> waiters, thread_compare_priority, 0);
+	if (!list_empty(&sema -> waiters)) {
+		list_sort(&sema -> waiters, thread_compare_priority, 0);
 		thread_unblock(list_entry(list_pop_front(&sema -> waiters), struct thread, elem));
+	}
 	
 	sema -> value++;
 	thread_test_preemption();

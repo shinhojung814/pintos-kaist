@@ -72,7 +72,6 @@ static void schedule(void);
 static tid_t allocate_tid (void);
 
 static struct list sleep_list;
-static int64_t next_wakeup;
 
 bool thread_compare_priority (struct list_elem *l, struct list_elem *s, void *aux);
 void thread_test_preemption(void);
@@ -248,11 +247,12 @@ void thread_block(void) {
 void thread_unblock(struct thread *t) {
 	enum intr_level old_level;
 
-	ASSERT(is_thread(t));
+	ASSERT (is_thread(t));
 	old_level = intr_disable();
 
 	ASSERT (t -> status == THREAD_BLOCKED);
 	list_insert_ordered(&ready_list, &t -> elem, thread_compare_priority, 0);
+
 	t -> status = THREAD_READY;
 	intr_set_level(old_level);
 }
@@ -539,15 +539,10 @@ static void do_schedule(int status) {
 static void schedule(void) {
 	struct thread *curr = running_thread();
 	struct thread *next = next_thread_to_run();
-	// struct thread *prev = NULL;
 
 	ASSERT (intr_get_level() == INTR_OFF);
 	ASSERT (curr -> status != THREAD_RUNNING);
 	ASSERT (is_thread(next));
-
-	// if (curr != next)
-	// 	prev = switch_threads(curr, next);
-	// thread_schedule_tail(prev);
 
 	/* Mark us as running. */
 	next -> status = THREAD_RUNNING;
@@ -592,14 +587,6 @@ static tid_t allocate_tid(void) {
 	return tid;
 }
 
-int64_t get_next_wakeup(void) {
-	return next_wakeup;
-}
-
-void update_next_wakeup(int64_t ticks) {
-	next_wakeup = (next_wakeup > ticks) ? ticks : next_wakeup;
-}
-
 void thread_sleep(int64_t ticks) {
 	struct thread *curr;
 	enum intr_level old_level;
@@ -614,36 +601,27 @@ void thread_sleep(int64_t ticks) {
 	thread_block();
 	
 	intr_set_level(old_level);
-
-	// update_next_wakeup(curr -> wakeup_time = ticks);
-	// list_push_back(&sleep_list, &curr -> elem);
-	// thread_block();
-	// intr_set_level(old_level);
 }
 
-void thread_wakeup(int64_t wakeup_time) {
+void thread_wakeup(int64_t ticks) {
 	struct list_elem *e;
 
-	// next_wakeup = INT64_MAX;
 	e = list_begin(&sleep_list);
 
 	while (e != list_end(&sleep_list)) {
 		struct thread *t = list_entry(e, struct thread, elem);
 
-		if (wakeup_time >= t -> wakeup_time) {
-			// e = list_remove(&t -> elem);
+		if (ticks >= t -> wakeup_time) {
 			e = list_remove(e);
 			thread_unblock(t);
 		}
 
-		else {
+		else
 			e = list_next(e);
-			// update_next_wakeup(t -> wakeup_time);
-		}
 	}
 }
 
-bool thread_compare_priority (struct list_elem *l, struct list_elem *s, void *aux) {
+bool thread_compare_priority (struct list_elem *l, struct list_elem *s, void *aux UNUSED) {
 	return list_entry(l, struct thread, elem) -> priority > list_entry(s, struct thread, elem) -> priority;
 }
 

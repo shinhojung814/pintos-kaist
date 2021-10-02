@@ -292,9 +292,9 @@ void list_reverse(struct list *list) {
 		struct list_elem *e;
 
 		for (e = list_begin(list); e != list_end(list); e = e -> prev)
-			swap (&e->prev, &e->next);
-		swap (&list->head.next, &list->tail.prev);
-		swap (&list->head.next->prev, &list->tail.prev->next);
+			swap (&e -> prev, &e -> next);
+		swap (&list -> head.next, &list -> tail.prev);
+		swap (&list -> head.next -> prev, &list -> tail.prev -> next);
 	}
 }
 
@@ -367,7 +367,7 @@ void list_sort (struct list *list, list_less_func *less, void *aux) {
 		struct list_elem *b1;     /* End of second run. */
 
 		output_run_cnt = 0;
-		for (a0 = list_begin (list); a0 != list_end (list); a0 = b1) {
+		for (a0 = list_begin(list); a0 != list_end (list); a0 = b1) {
 			/* Each iteration produces one output run. */
 			output_run_cnt++;
 
