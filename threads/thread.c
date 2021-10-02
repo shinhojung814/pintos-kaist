@@ -73,7 +73,8 @@ static tid_t allocate_tid (void);
 
 static struct list sleep_list;
 
-bool thread_compare_priority (struct list_elem *l, struct list_elem *s, void *aux);
+bool compare_thread_priority (struct list_elem *l, struct list_elem *s, void *aux);
+bool compare_donation_priority(const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);
 void thread_test_preemption(void);
 
 /* Returns true if T appears to point to a valid thread. */
@@ -251,7 +252,7 @@ void thread_unblock(struct thread *t) {
 	old_level = intr_disable();
 
 	ASSERT (t -> status == THREAD_BLOCKED);
-	list_insert_ordered(&ready_list, &t -> elem, thread_compare_priority, 0);
+	list_insert_ordered(&ready_list, &t -> elem, compare_thread_priority, 0);
 
 	t -> status = THREAD_READY;
 	intr_set_level(old_level);
@@ -310,7 +311,7 @@ void thread_yield(void) {
 	old_level = intr_disable();
 
 	if (curr != idle_thread)
-		list_insert_ordered(&ready_list, &curr -> elem, thread_compare_priority, 0);
+		list_insert_ordered(&ready_list, &curr -> elem, compare_thread_priority, 0);
 	
 	do_schedule(THREAD_READY);
 	intr_set_level(old_level);
@@ -409,6 +410,10 @@ static void init_thread(struct thread *t, const char *name, int priority) {
 	t -> tf.rsp = (uint64_t)t + PGSIZE - sizeof(void *);
 	t -> priority = priority;
 	t -> magic = THREAD_MAGIC;
+
+	t -> init_priority = priority;
+	t -> wait_on_lock = NULL;
+	list_init(&t -> donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -621,8 +626,12 @@ void thread_wakeup(int64_t ticks) {
 	}
 }
 
-bool thread_compare_priority (struct list_elem *l, struct list_elem *s, void *aux UNUSED) {
+bool compare_thread_priority (struct list_elem *l, struct list_elem *s, void *aux UNUSED) {
 	return list_entry(l, struct thread, elem) -> priority > list_entry(s, struct thread, elem) -> priority;
+}
+
+bool compare_donation_priority(const struct list_elem *l, const struct list_elem *s, void *aux UNUSED) {
+	return list_entry(l, struct thread, donation_elem) -> priority > list_entry(s, struct thread, donation_elem) -> priority;
 }
 
 void thread_test_preemption(void) {

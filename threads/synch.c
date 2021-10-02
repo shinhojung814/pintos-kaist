@@ -92,7 +92,7 @@ void sema_down(struct semaphore *sema) {
 	old_level = intr_disable();
 
 	while (sema -> value == 0) {
-		list_insert_ordered(&sema -> waiters, &thread_current() -> elem, thread_compare_priority, 0);
+		list_insert_ordered(&sema -> waiters, &thread_current() -> elem, compare_thread_priority, 0);
 		thread_block();
 	}
 
@@ -138,7 +138,7 @@ void sema_up(struct semaphore *sema) {
 	old_level = intr_disable();
 
 	if (!list_empty(&sema -> waiters)) {
-		list_sort(&sema -> waiters, thread_compare_priority, 0);
+		list_sort(&sema -> waiters, compare_thread_priority, 0);
 		thread_unblock(list_entry(list_pop_front(&sema -> waiters), struct thread, elem));
 	}
 	
@@ -211,11 +211,21 @@ void lock_init(struct lock *lock) {
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
 void lock_acquire(struct lock *lock) {
+	struct thread *curr = thread_current();
+
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context());
 	ASSERT (!lock_held_by_current_thread(lock));
 
+	if (lock -> holder) {
+		curr -> wait_on_lock = lock;
+		list_insert_ordered(&lock -> holder -> donations, &curr -> donation_elem, compare_donation_priority, 0);
+		donation_priority();
+	}
+
 	sema_down(&lock -> semaphore);
+
+	curr -> wait_on_lock = NULL;
 	lock -> holder = thread_current();
 }
 

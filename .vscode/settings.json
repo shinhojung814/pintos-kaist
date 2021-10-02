@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "string.h": "c",
-        "synch.h": "c"
+        "synch.h": "c",
+        "vaddr.h": "c"
     }
 }
