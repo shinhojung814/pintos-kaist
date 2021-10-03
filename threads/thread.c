@@ -61,8 +61,9 @@ void thread_start(void);
 void thread_tick(void);
 void thread_print_stats(void);
 
-tid_t thread_create(const char *name, int priority, thread_func *function, void *aux);
+tid_t thread_create(const char *name, int priority, thread_func *function, void *aux UNUSED);
 void thread_block(void);
+void thread_unblock(struct thread *t);
 
 static void idle(void *aux UNUSED);
 static struct thread *next_thread_to_run(void);
@@ -74,8 +75,12 @@ static tid_t allocate_tid (void);
 static struct list sleep_list;
 
 bool compare_thread_priority (struct list_elem *l, struct list_elem *s, void *aux);
-bool compare_donation_priority(const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);
 void thread_test_preemption(void);
+
+bool compare_donation_priority(const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);
+void donate_priority(void);
+void remove_with_lock(struct lock *lock);
+void priority_reset(void);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t) -> magic == THREAD_MAGIC)
@@ -130,7 +135,7 @@ void thread_init(void) {
 	initial_thread = running_thread();
 	init_thread(initial_thread, "main", PRI_DEFAULT);
 	initial_thread -> status = THREAD_RUNNING;
-	initial_thread -> tid = allocate_tid ();
+	initial_thread -> tid = allocate_tid();
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -189,7 +194,7 @@ void thread_print_stats(void) {
    The code provided sets the new thread's `priority' member to
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
-tid_t thread_create(const char *name, int priority, thread_func *function, void *aux) {
+tid_t thread_create(const char *name, int priority, thread_func *function, void *aux UNUSED) {
 	struct thread *t;
 	tid_t tid;
 
@@ -252,6 +257,7 @@ void thread_unblock(struct thread *t) {
 	old_level = intr_disable();
 
 	ASSERT (t -> status == THREAD_BLOCKED);
+
 	list_insert_ordered(&ready_list, &t -> elem, compare_thread_priority, 0);
 
 	t -> status = THREAD_READY;
@@ -319,7 +325,9 @@ void thread_yield(void) {
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) {
-	thread_current() -> priority = new_priority;
+	thread_current() -> init_priority = new_priority;
+
+	priority_reset();
 	thread_test_preemption();
 }
 
@@ -534,11 +542,12 @@ static void do_schedule(int status) {
 
 	while (!list_empty(&destruction_req)) {
 		struct thread *victim = list_entry(list_pop_front(&destruction_req), struct thread, elem);
+
 		palloc_free_page(victim);
 	}
 
 	thread_current() -> status = status;
-	schedule ();
+	schedule();
 }
 
 static void schedule(void) {
@@ -554,7 +563,6 @@ static void schedule(void) {
 
 	/* Start new time slice. */
 	thread_ticks = 0;
-	// thread_schedule_tail(prev);
 
 #ifdef USERPROG
 	/* Activate the new address space. */
@@ -630,11 +638,53 @@ bool compare_thread_priority (struct list_elem *l, struct list_elem *s, void *au
 	return list_entry(l, struct thread, elem) -> priority > list_entry(s, struct thread, elem) -> priority;
 }
 
+void thread_test_preemption(void) {
+	if (!list_empty(&ready_list) && thread_current() -> priority < list_entry(list_front(&ready_list), struct thread, elem) -> priority)
+		thread_yield();
+}
+
 bool compare_donation_priority(const struct list_elem *l, const struct list_elem *s, void *aux UNUSED) {
 	return list_entry(l, struct thread, donation_elem) -> priority > list_entry(s, struct thread, donation_elem) -> priority;
 }
 
-void thread_test_preemption(void) {
-	if (!list_empty(&ready_list) && thread_current() -> priority < list_entry(list_front(&ready_list), struct thread, elem) -> priority)
-		thread_yield();
+void donate_priority(void) {
+	int depth;
+	struct thread *curr = thread_current();
+
+	for (depth = 0; depth < 8; depth++) {
+		if (!curr -> wait_on_lock)
+			break;
+		
+		struct thread *holder = curr -> wait_on_lock -> holder;
+		
+		holder -> priority = curr -> priority;
+		curr = holder;
+	}
+}
+
+void remove_with_lock(struct lock *lock) {
+	struct list_elem *e;
+	struct thread *curr = thread_current();
+
+	for (e = list_begin(&curr -> donations); e != list_end(&curr -> donations); e = list_next(e)) {
+		struct thread *t = list_entry(e, struct thread, donation_elem);
+
+		if (t -> wait_on_lock == lock)
+			list_remove(&t -> donation_elem);
+	}
+}
+
+void priority_reset(void) {
+	struct thread *curr = thread_current();
+
+	curr -> priority = curr -> init_priority;
+
+	if (!list_empty(&curr -> donations)) {
+		list_sort(&curr -> donations, compare_donation_priority, 0);
+
+		struct thread *front = list_entry(list_front(&curr -> donations), struct thread, donation_elem);
+
+		if (front -> priority > curr -> priority)
+			curr -> priority = front -> priority;
+	}
 }

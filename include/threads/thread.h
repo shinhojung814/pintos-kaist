@@ -91,8 +91,8 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
-	int init_priority;
 	int64_t wakeup_time;
+	int init_priority;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
@@ -126,10 +126,10 @@ void thread_tick(void);
 void thread_print_stats(void);
 
 typedef void thread_func(void *aux);
-tid_t thread_create(const char *name, int priority, thread_func *, void *);
+tid_t thread_create(const char *name, int priority, thread_func *function, void *aux UNUSED);
 
 void thread_block(void);
-void thread_unblock(struct thread *);
+void thread_unblock(struct thread *t);
 
 struct thread *thread_current(void);
 tid_t thread_tid(void);
@@ -152,7 +152,11 @@ void thread_sleep(int64_t ticks);
 void thread_wakeup(int64_t ticks);
 
 bool compare_thread_priority (struct list_elem *l, struct list_elem *s, void *aux UNUSED);
-bool compare_donation_priority(const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);
 void thread_test_preemption(void);
+
+bool compare_donation_priority(const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);
+void donate_priority(void);
+void remove_with_lock(struct lock *lock);
+void priority_reset(void);
 
 #endif /* threads/thread.h */

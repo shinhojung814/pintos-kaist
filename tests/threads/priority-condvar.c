@@ -32,7 +32,7 @@ void test_priority_condvar(void) {
     }
 
   for (i = 0; i < 10; i++) {
-      lock_acquire (&lock);
+      lock_acquire(&lock);
       msg("Signaling...");
       cond_signal(&condition, &lock);
       lock_release(&lock);

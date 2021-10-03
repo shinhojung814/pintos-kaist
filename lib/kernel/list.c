@@ -447,7 +447,7 @@ struct list_elem *list_max(struct list *list, list_less_func *less, void *aux) {
    to LESS given auxiliary data AUX.  If there is more than one
    minimum, returns the one that appears earlier in the list.  If
    the list is empty, returns its tail. */
-struct list_elem *list_min (struct list *list, list_less_func *less, void *aux) {
+struct list_elem *list_min(struct list *list, list_less_func *less, void *aux) {
 	struct list_elem *min = list_begin(list);
 	if (min != list_end(list)) {
 		struct list_elem *e;
