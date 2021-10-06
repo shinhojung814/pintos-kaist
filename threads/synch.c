@@ -264,6 +264,13 @@ void lock_release(struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread(lock));
 
+	lock -> holder = NULL;
+
+	if (thread_mlfqs) {
+		sema_up(&lock -> semaphore);
+		return;
+	}
+
 	remove_with_lock(lock);
 	priority_reset();
 	
