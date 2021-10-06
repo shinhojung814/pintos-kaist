@@ -34,7 +34,6 @@ void process_exit (void);
 static void process_cleanup(void);
 void process_activate(struct thread *next);
 static bool load(const char *file_name, struct intr_frame *if_);
-static bool validate_segment(const struct Phdr *phdr, struct file *file);
 static bool install_page(void *upage, void *kpage, bool writable);
 static bool load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 static bool setup_stack(struct intr_frame *if_);
@@ -68,7 +67,7 @@ tid_t process_create_initd(const char *file_name) {
 	tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy);
 
 	if (tid == TID_ERROR)
-		palloc_free_page (fn_copy);
+		palloc_free_page(fn_copy);
 
 	return tid;
 }
@@ -78,7 +77,6 @@ static void initd(void *f_name) {
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
-
 	process_init();
 
 	if (process_exec(f_name) < 0)
@@ -91,7 +89,7 @@ static void initd(void *f_name) {
  * TID_ERROR if the thread cannot be created. */
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
-	return thread_create (name, PRI_DEFAULT, __do_fork, thread_current());
+	return thread_create(name, PRI_DEFAULT, __do_fork, thread_current());
 }
 
 #ifndef VM
@@ -107,7 +105,7 @@ static bool duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
 
 	/* 2. Resolve VA from the parent's page map level 4. */
-	parent_page = pml4_get_page (parent -> pml4, va);
+	parent_page = pml4_get_page(parent -> pml4, va);
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
@@ -118,7 +116,7 @@ static bool duplicate_pte (uint64_t *pte, void *va, void *aux) {
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
-	if (!pml4_set_page (current -> pml4, va, newpage, writable)) {
+	if (!pml4_set_page(current -> pml4, va, newpage, writable)) {
 		/* 6. TODO: if fail to insert page, do error handling. */
 	}
 	return true;
@@ -240,11 +238,9 @@ int process_wait(tid_t child_tid UNUSED) {
 /* Exit the process. This function is called by thread_exit (). */
 void process_exit (void) {
 	struct thread *curr = thread_current();
-	/* TODO: Your code goes here.
-	 * TODO: Implement process termination message (see
-	 * TODO: project2/process_termination.html).
-	 * TODO: We recommend you to implement process resource cleanup here. */
 
+	/* Destroy the current process's page directory
+	and switch back to the kernel-only page directory */
 	process_cleanup();
 }
 
@@ -339,7 +335,7 @@ struct ELF64_PHDR {
 #define Phdr ELF64_PHDR
 
 static bool setup_stack(struct intr_frame *if_);
-static bool validate_segment(const struct Phdr *, struct file *);
+static bool validate_segment(const struct Phdr *phdr, struct file *file);
 static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
 		bool writable);
@@ -366,6 +362,7 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 
 	/* Open executable file. */
 	file = filesys_open(file_name);
+
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
@@ -395,6 +392,7 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 		if (file_read(file, &phdr, sizeof phdr) != sizeof phdr)
 			goto done;
 		file_ofs += sizeof phdr;
+		
 		switch (phdr.p_type) {
 			case PT_NULL:
 			case PT_NOTE:

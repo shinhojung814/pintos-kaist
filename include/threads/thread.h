@@ -103,6 +103,7 @@ struct thread {
 	struct lock *wait_on_lock;
 	struct list donations;
 	struct list_elem donation_elem;
+	struct list_elem iter;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
