@@ -32,14 +32,14 @@ static void real_time_sleep(int64_t num, int32_t denom);
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
    interrupt PIT_FREQ times per second, and registers the
    corresponding interrupt. */
-void timer_init (void) {
+void timer_init(void) {
 	/* 8254 input frequency divided by TIMER_FREQ, rounded to
 	   nearest. */
 	uint16_t count = (1193180 + TIMER_FREQ / 2) / TIMER_FREQ;
 
-	outb (0x43, 0x34);    /* CW: counter 0, LSB then MSB, mode 2, binary. */
-	outb (0x40, count & 0xff);
-	outb (0x40, count >> 8);
+	outb(0x43, 0x34);    /* CW: counter 0, LSB then MSB, mode 2, binary. */
+	outb(0x40, count & 0xff);
+	outb(0x40, count >> 8);
 
 	intr_register_ext(0x20, timer_interrupt, "8254 Timer");
 }
@@ -69,7 +69,7 @@ void timer_calibrate(void) {
 }
 
 /* Returns the number of timer ticks since the OS booted. */
-int64_t timer_ticks (void) {
+int64_t timer_ticks(void) {
 	enum intr_level old_level = intr_disable();
 	int64_t t = ticks;
 	
@@ -139,6 +139,7 @@ static void timer_interrupt(struct intr_frame *args UNUSED) {
 static bool too_many_loops(unsigned loops) {
 	/* Wait for a timer tick. */
 	int64_t start = ticks;
+
 	while (ticks == start)
 		barrier();
 
@@ -164,7 +165,7 @@ static void NO_INLINE busy_wait (int64_t loops) {
 }
 
 /* Sleep for approximately NUM/DENOM seconds. */
-static void real_time_sleep (int64_t num, int32_t denom) {
+static void real_time_sleep(int64_t num, int32_t denom) {
 	/* Convert NUM/DENOM seconds into timer ticks, rounding down.
 
 	   (NUM / DENOM) s
@@ -179,6 +180,7 @@ static void real_time_sleep (int64_t num, int32_t denom) {
 		   timer_sleep() because it will yield the CPU to other
 		   processes. */
 		timer_sleep(ticks);
+	
 	} else {
 		/* Otherwise, use a busy-wait loop for more accurate
 		   sub-tick timing.  We scale the numerator and denominator
