@@ -169,10 +169,10 @@ void thread_start(void) {
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void thread_tick(void) {
-	struct thread *t = thread_current();
+	struct thread *curr = thread_current();
 
 	/* Update statistics. */
-	if (t == idle_thread)
+	if (curr == idle_thread)
 		idle_ticks++;
 #ifdef USERPROG
 	else if (t -> pml4 != NULL)
