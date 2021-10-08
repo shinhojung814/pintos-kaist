@@ -19,6 +19,8 @@
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
+static int64_t min_endtick = -1;
+const int F = 1 << 14;
 
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
@@ -87,10 +89,18 @@ int64_t timer_elapsed(int64_t then) {
 /* Suspends execution for approximately TICKS timer ticks. */
 void timer_sleep(int64_t ticks) {
 	int64_t start = timer_ticks();
+	struct thread *curr = thread_current();
 
 	ASSERT (intr_get_level() == INTR_ON);
-	
-	thread_sleep(start + ticks);
+
+	if (timer_elapsed(start) < ticks) {
+		curr -> end_tick = start + ticks;
+
+		if (min_endtick == -1 || curr -> end_tick < min_endtick)
+			min_endtick = curr -> end_tick;
+		
+		thread_sleep();
+	}
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -116,22 +126,31 @@ void timer_print_stats(void) {
 /* Timer interrupt handler. */
 static void timer_interrupt(struct intr_frame *args UNUSED) {
 	ticks++;
-	thread_tick();
+
+	while (min_endtick != -1 && min_endtick <= ticks) {
+		enum intr_level old_level = intr_disable();
+
+		min_endtick = thread_wakeup();
+
+		intr_set_level(old_level);
+	}
 
 	if (thread_mlfqs) {
-		mlfqs_increment_recent_cpu();
+		struct thread *curr = thread_current();
 
-		if (ticks % 4 == 0) {
-			mlfqs_recalculate_priority();
+		if (!(thread_name() == "idle"))
+			curr -> recent_cpu += F;
 
-			if (ticks % TIMER_FREQ == 0) {
-				mlfqs_recalculate_recent_cpu();
-				mlfqs_calculate_load_avg();
-			}
+		if (ticks % TIMER_FREQ == 0) {
+			update_load_avg();
+			update_total_recent_cpu();
 		}
+
+		if (ticks % 4 == 0)
+			update_total_priority();
 	}
 	
-	thread_wakeup(ticks);
+	thread_tick();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -159,7 +178,7 @@ static bool too_many_loops(unsigned loops) {
    affect timings, so that if this function was inlined
    differently in different places the results would be difficult
    to predict. */
-static void NO_INLINE busy_wait (int64_t loops) {
+static void NO_INLINE busy_wait(int64_t loops) {
 	while (loops-- > 0)
 		barrier();
 }

@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 #include "threads/interrupt.h"
 #ifdef VM
 #include "vm/vm.h"
@@ -26,9 +27,12 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
-#define NICE_DEFAULT 0
-#define RECENT_CPU_DEFAULT 0
-#define LOAD_AVG_DEFAULT 0
+
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MIN(a, b) (((a) < (b)) > (a) : (b))
+
+#define FDT_PAGES 3
+#define FDCOUNT_LIMIT FDT_PAGES *(1 << 9)
 
 /* A kernel thread or user process.
  *
@@ -93,29 +97,33 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
+
+	int end_tick;
+
 	int init_priority;
+	int donated_priority;
+	struct lock *waiting_lock;
+	struct lock donors;
+	struct list_elem donation_elem;
+
 	int nice;
 	int recent_cpu;
-	int64_t wakeup_time;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
-	struct lock *wait_on_lock;
-	struct list donations;
-	struct list_elem donation_elem;
-	struct list_elem iter;
 
 	struct list child_list;
 	struct list_elem child_elem;
 
 	int exit_status;
 	struct semaphore wait_sema;
+
 	struct semaphore fork_sema;
 	struct semaphore free_sema;
 	struct intr_frame parent_if;
 
-	int fdCount;
-	struct file **fdTable;
+	int fd_idx;
+	struct file **fd_table;
 
 	struct file *running;
 
@@ -135,10 +143,7 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
-	struct list_elem all_elem;
 };
-
-static struct list all_list;
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -152,7 +157,7 @@ void thread_tick(void);
 void thread_print_stats(void);
 
 typedef void thread_func(void *aux);
-tid_t thread_create(const char *name, int priority, thread_func *function, void *aux UNUSED);
+tid_t thread_create(const char *name, int priority, thread_func *function, void *aux);
 
 void thread_block(void);
 void thread_unblock(struct thread *t);
@@ -174,22 +179,18 @@ int thread_get_load_avg(void);
 
 void do_iret(struct intr_frame *tf);
 
-void thread_sleep(int64_t ticks);
-void thread_wakeup(int64_t ticks);
+bool compare_thread_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool compare_endtick_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+void thread_sleep(void);
+int64_t thread_wakeup(void);
 
-bool compare_thread_priority (struct list_elem *l, struct list_elem *s, void *aux UNUSED);
-void thread_test_preemption(void);
+void nested_donation(struct thread *t, int new_priority);
+void multiple_donation(struct thread *curr);
 
-bool compare_donation_priority(const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);
-void donate_priority(void);
-void remove_with_lock(struct lock *lock);
-void priority_reset(void);
-
-void mlfqs_calculate_priority(struct thread *t);
-void mlfqs_calculate_recent_cpu(struct thread *t);
-void mlfqs_calculate_load_avg(void);
-void mlfqs_increment_recent_cpu(void);
-void mlfqs_recalculate_recent_cpu(void);
-void mlfqs_recalculate_priority(void);
+void update_thread_recent_cpu(struct thread *t);
+void update_total_recent_cpu(void);
+void update_load_avg(void);
+void update_thread_priority(struct thread *t);
+void update_total_priority(void);
 
 #endif /* threads/thread.h */

@@ -327,7 +327,7 @@ void intr_handler(struct intr_frame *frame) {
 	   We only handle one at a time (so interrupts must be off)
 	   and they need to be acknowledged on the PIC (see below).
 	   An external interrupt handler cannot sleep. */
-	external = frame->vec_no >= 0x20 && frame->vec_no < 0x30;
+	external = frame -> vec_no >= 0x20 && frame -> vec_no < 0x30;
 
 	if (external) {
 		ASSERT (intr_get_level() == INTR_OFF);
@@ -339,10 +339,11 @@ void intr_handler(struct intr_frame *frame) {
 
 	/* Invoke the interrupt's handler. */
 	handler = intr_handlers[frame -> vec_no];
+
 	if (handler != NULL)
 		handler (frame);
 	
-	else if (frame->vec_no == 0x27 || frame->vec_no == 0x2f) {
+	else if (frame -> vec_no == 0x27 || frame -> vec_no == 0x2f) {
 		/* There is no handler, but this interrupt can trigger
 		   spuriously due to a hardware fault or hardware race
 		   condition.  Ignore it. */
@@ -393,6 +394,6 @@ void intr_dump_frame(const struct intr_frame *f) {
 }
 
 /* Returns the name of interrupt VEC. */
-const char *intr_name (uint8_t vec) {
+const char *intr_name(uint8_t vec) {
 	return intr_names[vec];
 }
