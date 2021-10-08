@@ -181,7 +181,9 @@ static void real_time_sleep(int64_t num, int32_t denom) {
 		   processes. */
 		timer_sleep(ticks);
 	
-	} else {
+	}
+	
+	else {
 		/* Otherwise, use a busy-wait loop for more accurate
 		   sub-tick timing.  We scale the numerator and denominator
 		   down by 1000 to avoid the possibility of overflow. */

@@ -68,7 +68,7 @@ struct list_elem *list_begin(struct list *list) {
    last element in its list, returns the list tail.  Results are
    undefined if ELEM is itself a list tail. */
 struct list_elem *list_next(struct list_elem *elem) {
-	ASSERT (is_head (elem) || is_interior (elem));
+	ASSERT (is_head(elem) || is_interior(elem));
 	return elem -> next;
 }
 
@@ -155,6 +155,7 @@ void list_insert(struct list_elem *before, struct list_elem *elem) {
    be either an interior element or a tail. */
 void list_splice(struct list_elem *before, struct list_elem *first, struct list_elem *last) {
 	ASSERT (is_interior(before) || is_tail(before));
+
 	if (first == last)
 		return;
 	
@@ -280,7 +281,7 @@ bool list_empty(struct list *list) {
 }
 
 /* Swaps the `struct list_elem *'s that A and B point to. */
-static void swap (struct list_elem **a, struct list_elem **b) {
+static void swap(struct list_elem **a, struct list_elem **b) {
 	struct list_elem *t = *a;
 	*a = *b;
 	*b = t;
@@ -302,8 +303,8 @@ void list_reverse(struct list *list) {
    are in order according to LESS given auxiliary data AUX. */
 static bool is_sorted (struct list_elem *a, struct list_elem *b, list_less_func *less, void *aux) {
 	if (a != b)
-		while ((a = list_next (a)) != b)
-			if (less (a, list_prev(a), aux))
+		while ((a = list_next(a)) != b)
+			if (less(a, list_prev(a), aux))
 				return false;
 	
 	return true;
@@ -314,15 +315,17 @@ static bool is_sorted (struct list_elem *a, struct list_elem *b, list_less_func 
    given auxiliary data AUX.  Returns the (exclusive) end of the
    run.
    A through B (exclusive) must form a non-empty range. */
-static struct list_elem *find_end_of_run (struct list_elem *a, struct list_elem *b, list_less_func *less, void *aux) {
+static struct list_elem *find_end_of_run(struct list_elem *a, struct list_elem *b, list_less_func *less, void *aux) {
 	ASSERT (a != NULL);
 	ASSERT (b != NULL);
 	ASSERT (less != NULL);
 	ASSERT (a != b);
 
 	do {
-		a = list_next (a);
-	} while (a != b && !less (a, list_prev (a), aux));
+		a = list_next(a);
+	}
+	
+	while (a != b && !less(a, list_prev(a), aux));
 
 	return a;
 }
@@ -332,17 +335,17 @@ static struct list_elem *find_end_of_run (struct list_elem *a, struct list_elem 
    (exclusive).  Both input ranges must be nonempty and sorted in
    nondecreasing order according to LESS given auxiliary data
    AUX.  The output range will be sorted the same way. */
-static void inplace_merge (struct list_elem *a0, struct list_elem *a1b0, struct list_elem *b1, list_less_func *less, void *aux) {
+static void inplace_merge(struct list_elem *a0, struct list_elem *a1b0, struct list_elem *b1, list_less_func *less, void *aux) {
 	ASSERT (a0 != NULL);
 	ASSERT (a1b0 != NULL);
 	ASSERT (b1 != NULL);
 	ASSERT (less != NULL);
-	ASSERT (is_sorted (a0, a1b0, less, aux));
-	ASSERT (is_sorted (a1b0, b1, less, aux));
+	ASSERT (is_sorted(a0, a1b0, less, aux));
+	ASSERT (is_sorted(a1b0, b1, less, aux));
 
 	while (a0 != a1b0 && a1b0 != b1)
 		if (!less (a1b0, a0, aux))
-			a0 = list_next (a0);
+			a0 = list_next(a0);
 		
 		else {
 			a1b0 = list_next(a1b0);
@@ -353,7 +356,7 @@ static void inplace_merge (struct list_elem *a0, struct list_elem *a1b0, struct 
 /* Sorts LIST according to LESS given auxiliary data AUX, using a
    natural iterative merge sort that runs in O(n lg n) time and
    O(1) space in the number of elements in LIST. */
-void list_sort (struct list *list, list_less_func *less, void *aux) {
+void list_sort(struct list *list, list_less_func *less, void *aux) {
 	size_t output_run_cnt;        /* Number of runs output in current pass. */
 
 	ASSERT (list != NULL);
@@ -383,6 +386,7 @@ void list_sort (struct list *list, list_less_func *less, void *aux) {
 			inplace_merge (a0, a1b0, b1, less, aux);
 		}
 	}
+
 	while (output_run_cnt > 1);
 
 	ASSERT (is_sorted(list_begin(list), list_end(list), less, aux));
@@ -409,7 +413,7 @@ void list_insert_ordered (struct list *list, struct list_elem *elem, list_less_f
    set of adjacent elements that are equal according to LESS
    given auxiliary data AUX.  If DUPLICATES is non-null, then the
    elements from LIST are appended to DUPLICATES. */
-void list_unique (struct list *list, struct list *duplicates, list_less_func *less, void *aux) {
+void list_unique(struct list *list, struct list *duplicates, list_less_func *less, void *aux) {
 	struct list_elem *elem, *next;
 
 	ASSERT (list != NULL);
@@ -421,8 +425,10 @@ void list_unique (struct list *list, struct list *duplicates, list_less_func *le
 	while ((next = list_next(elem)) != list_end(list))
 		if (!less(elem, next, aux) && !less(next, elem, aux)) {
 			list_remove(next);
+
 			if (duplicates != NULL)
 				list_push_back(duplicates, next);
+		
 		} else
 			elem = next;
 }

@@ -110,9 +110,9 @@ struct thread {
 
 	int exit_status;
 	struct semaphore wait_sema;
-	// struct semaphore fork_sema;
-	// struct semaphore free_sema;
-	// struct intr_frame parent_if;
+	struct semaphore fork_sema;
+	struct semaphore free_sema;
+	struct intr_frame parent_if;
 
 	int fdCount;
 	struct file **fdTable;
