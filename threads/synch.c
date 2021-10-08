@@ -187,10 +187,10 @@ static void sema_test_helper(void *sema_) {
 bool compare_sema_priority(const struct list_elem *l, const struct list_elem *s, void *aux) {
 	struct semaphore_elem *sema_l = list_entry(l, struct semaphore_elem, elem);
 	struct semaphore_elem *sema_s = list_entry(s, struct semaphore_elem, elem);
-	struct thread *thread_l = list_entry(list_front(&sema_l -> semaphore.waiters), struct thread, elem);
-	struct thread *thread_s = list_entry(list_front(&sema_s -> semaphore.waiters), struct thread, elem);
+	struct thread *thread_a = list_entry(list_front(&sema_l -> semaphore.waiters), struct thread, elem);
+	struct thread *thread_b = list_entry(list_front(&sema_s -> semaphore.waiters), struct thread, elem);
 
-	return thread_l -> priority > thread_s -> priority;
+	return thread_a -> priority > thread_b -> priority;
 }
 
 /* Initializes LOCK.  A lock can be held by at most a single

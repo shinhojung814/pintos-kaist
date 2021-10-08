@@ -265,6 +265,9 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
 
 	tid = t -> tid = allocate_tid();
 
+	struct thread *curr = thread_current();
+	list_push_back(&curr -> child_list, &t -> child_elem);
+
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
 	t -> tf.rip = (uintptr_t)kernel_thread;
@@ -279,7 +282,7 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
 	/* Add to run queue. */
 	thread_unblock(t);
 	
-	if (thread_current() -> priority < t -> priority) 
+	if (curr -> priority < t -> priority) 
 		thread_yield();
 
 	return tid;
@@ -292,10 +295,12 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
 void thread_block(void) {
+	struct thread *curr = thread_current();
+
 	ASSERT(!intr_context());
 	ASSERT(intr_get_level() == INTR_OFF);
 
-	thread_current() -> status = THREAD_BLOCKED;
+	curr -> status = THREAD_BLOCKED;
 	schedule();
 }
 
@@ -696,9 +701,11 @@ bool compare_endtick_priority(const struct list_elem *a, const struct list_elem 
 
 void thread_sleep(void) {
 	struct thread *curr = thread_current();
-	enum intr_level old_level = intr_disable();
+	enum intr_level old_level;
 
 	ASSERT (curr -> status == THREAD_RUNNING);
+
+	old_level = intr_disable();
 	
 	if (curr != idle_thread)
 		list_insert_ordered(&sleep_list, &curr -> elem, compare_endtick_priority, NULL);
