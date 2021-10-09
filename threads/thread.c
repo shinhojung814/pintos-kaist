@@ -58,8 +58,6 @@ int f = 1 << 14;
 
 bool thread_mlfqs;
 
-static struct list sleep_list;
-
 static void kernel_thread(thread_func *function, void *aux);
 static void init_thread(struct thread *, const char *name, int priority);
 static struct thread *next_thread_to_run(void);
@@ -155,8 +153,8 @@ void thread_init(void) {
 
 	/* Init the global thread context */
 	lock_init(&tid_lock);
-	list_init(&ready_list);
 	list_init(&sleep_list);
+	list_init(&ready_list);
 	list_init(&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -256,9 +254,9 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
 	t -> stdout_count = 1;
 
 	if (thread_mlfqs) {
-		t -> priority = PRI_MAX;
 		t -> nice = 0;
 		t -> recent_cpu = 0;
+		t -> priority = PRI_MAX;
 	}
 
 	tid = t -> tid = allocate_tid();
@@ -280,7 +278,7 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
 	/* Add to run queue. */
 	thread_unblock(t);
 	
-	if (curr -> priority < t -> priority) 
+	if (thread_current() -> priority < t -> priority) 
 		thread_yield();
 
 	return tid;

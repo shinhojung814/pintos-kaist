@@ -4,7 +4,8 @@
         "synch.h": "c",
         "vaddr.h": "c",
         "list.h": "c",
-        "debug.h": "c"
+        "debug.h": "c",
+        "*.inc": "c"
     },
     "C_Cpp.errorSquiggles": "Disabled"
 }
