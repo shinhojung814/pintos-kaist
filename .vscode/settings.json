@@ -3,7 +3,8 @@
         "string.h": "c",
         "synch.h": "c",
         "vaddr.h": "c",
-        "list.h": "c"
+        "list.h": "c",
+        "debug.h": "c"
     },
     "C_Cpp.errorSquiggles": "Disabled"
 }

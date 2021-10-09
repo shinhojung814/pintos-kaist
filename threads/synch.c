@@ -44,7 +44,7 @@ bool sema_try_down(struct semaphore *sema);
 void sema_up(struct semaphore *sema);
 void sema_self_test(void);
 static void sema_test_helper(void *sema_);
-bool compare_sema_priority(const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);
+bool compare_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 void lock_init(struct lock *lock);
 void lock_acquire(struct lock *lock);
@@ -184,11 +184,11 @@ static void sema_test_helper(void *sema_) {
 	}
 }
 
-bool compare_sema_priority(const struct list_elem *l, const struct list_elem *s, void *aux) {
-	struct semaphore_elem *sema_l = list_entry(l, struct semaphore_elem, elem);
-	struct semaphore_elem *sema_s = list_entry(s, struct semaphore_elem, elem);
-	struct thread *thread_a = list_entry(list_front(&sema_l -> semaphore.waiters), struct thread, elem);
-	struct thread *thread_b = list_entry(list_front(&sema_s -> semaphore.waiters), struct thread, elem);
+bool compare_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux) {
+	struct semaphore_elem *wait_a = list_entry(a, struct semaphore_elem, elem);
+	struct semaphore_elem *wait_b = list_entry(b, struct semaphore_elem, elem);
+	struct thread *thread_a = list_entry(list_front(&wait_a -> semaphore.waiters), struct thread, elem);
+	struct thread *thread_b = list_entry(list_front(&wait_b -> semaphore.waiters), struct thread, elem);
 
 	return thread_a -> priority > thread_b -> priority;
 }
@@ -224,11 +224,11 @@ void lock_init(struct lock *lock) {
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
 void lock_acquire(struct lock *lock) {
-	struct thread *curr = thread_current();
-
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context());
 	ASSERT (!lock_held_by_current_thread(lock));
+
+	struct thread *curr = thread_current();
 
 	if (!thread_mlfqs) {
 		enum intr_level old_level = intr_disable();
@@ -276,10 +276,10 @@ bool lock_try_acquire(struct lock *lock) {
    make sense to try to release a lock within an interrupt
    handler. */
 void lock_release(struct lock *lock) {
-	struct thread *curr = thread_current();
-
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread(lock));
+
+	struct thread *curr = thread_current();
 
 	if (!thread_mlfqs) {
 		struct list *donors_list = &curr -> donors;

@@ -1,9 +1,9 @@
-#include "threads/thread.h"
 #include <debug.h>
 #include <stddef.h>
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include "threads/thread.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -109,8 +109,6 @@ void update_total_recent_cpu(void);
 void update_load_avg(void);
 void update_thread_priority(struct thread *t);
 void update_total_priority(void);
-
-bool compare_thread_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t) -> magic == THREAD_MAGIC)
@@ -295,10 +293,10 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
 void thread_block(void) {
-	struct thread *curr = thread_current();
-
 	ASSERT(!intr_context());
 	ASSERT(intr_get_level() == INTR_OFF);
+
+	struct thread *curr = thread_current();
 
 	curr -> status = THREAD_BLOCKED;
 	schedule();
@@ -371,10 +369,10 @@ void thread_exit(void) {
 /* Yields the CPU. The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
 void thread_yield(void) {
+	ASSERT (!intr_context());
+
 	struct thread *curr = thread_current();
 	enum intr_level old_level = intr_disable();
-
-	ASSERT (!intr_context());
 
 	if (curr != idle_thread)
 		list_insert_ordered(&ready_list, &curr -> elem, compare_thread_priority, NULL);
@@ -385,11 +383,11 @@ void thread_yield(void) {
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) {
+	ASSERT (!thread_mlfqs);
+	
 	enum intr_level old_level = intr_disable();
 	struct thread *curr = thread_current();
 
-	ASSERT (!thread_mlfqs);
-	
 	curr -> init_priority = new_priority;
 	curr -> priority = MAX(curr -> init_priority, curr -> donated_priority);
 
@@ -715,9 +713,9 @@ void thread_sleep(void) {
 }
 
 int64_t thread_wakeup(void) {
-	struct thread *t;
-
 	ASSERT(intr_get_level() == INTR_OFF);
+
+	struct thread *t;
 
 	t = list_entry(list_pop_front(&sleep_list), struct thread, elem);
 	thread_unblock(t);

@@ -103,7 +103,7 @@ struct thread {
 	int init_priority;
 	int donated_priority;
 	struct lock *waiting_lock;
-	struct lock donors;
+	struct list donors;
 	struct list_elem donation_elem;
 
 	int nice;
