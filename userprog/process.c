@@ -176,29 +176,30 @@ struct thread *get_child_with_pid(int pid) {
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
  * TID_ERROR if the thread cannot be created. */
-// tid_t process_fork(const char *name, struct intr_frame *if_) {
-// 	/* Clone current thread to new thread.*/
-// 	struct thread *curr = thread_current();
+tid_t process_fork(const char *name, struct intr_frame *if_) {
+	/* Clone current thread to new thread.*/
+	struct thread *curr = thread_current();
 
-// 	memcpy(&curr -> parent_if, if_, sizeof(struct intr_frame));
-// 	tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, curr);
+	memcpy(&curr -> parent_if, if_, sizeof(struct intr_frame));
 
-// 	if (tid == TID_ERROR)
-// 		return TID_ERROR;
+	tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, curr);
+
+	if (tid == TID_ERROR)
+		return TID_ERROR;
 	
-// 	struct thread *child = get_child_with_pid(tid);
+	struct thread *child = get_child_with_pid(tid);
 	
-// 	sema_down(&child -> fork_sema);
+	sema_down(&child -> fork_sema);
 
-// 	if (child -> exit_status == -1)
-// 		return TID_ERROR;
+	if (child -> exit_status == -1)
+		return TID_ERROR;
 
-// #ifdef DEBUG_WAIT
-// 	printf("[process_fork] pid %d : child %s\n", tid, child -> name);
-// #endif
+#ifdef DEBUG_WAIT
+	printf("[process_fork] pid %d : child %s\n", tid, child -> name);
+#endif
 
-// 	return tid;
-// }
+	return tid;
+}
 
 #ifndef VM
 /* Duplicate the parent's address space by passing this function to the
@@ -207,13 +208,13 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
 	struct thread *curr = thread_current();
 	struct thread *parent = (struct thread *)aux;
 	void *parent_page;
-	void *newpage;
+	void *new_page;
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
 	if (is_kernel_vaddr(va)) {
 #ifdef DEBUG
-		
+		printf("[fork-duplicate] fail at step 1 %11x\n", va)
 #endif
 		return true;
 	}
@@ -243,9 +244,9 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
-	newpage = palloc_get_page(PAL_USER);
+	new_page = palloc_get_page(PAL_USER);
 
-	if (newpage == NULL) {
+	if (new_page == NULL) {
 		printf("[fork-duplicate] failed to palloc new page\n");
 		return false;
 	}
@@ -253,12 +254,12 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
-	memcpy(newpage, parent_page, PGSIZE);
+	memcpy(new_page, parent_page, PGSIZE);
 	writable = is_writable(pte);
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
-	if (!pml4_set_page(curr -> pml4, va, newpage, writable)) {
+	if (!pml4_set_page(curr -> pml4, va, new_page, writable)) {
 
 		/* 6. TODO: if fail to insert page, do error handling. */
 		printf("Failed to map user virtual to given physical frame\n");
@@ -266,7 +267,7 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
 	}
 
 #ifdef DEBUG
-	if (pml4_get_page(curr -> pml4, va) != newpage)
+	if (pml4_get_page(curr -> pml4, va) != new_page)
 		printf("Not mapped");
 	
 	printf("Completed copy\n");
@@ -280,103 +281,103 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
  * Hint) parent->tf does not hold the userland context of the process.
  *       That is, you are required to pass second argument of process_fork to
  *       this function. */
-// static void __do_fork(void *aux) {
-// 	struct thread *curr = thread_current();
-// 	struct thread *parent = (struct thread *)aux;
-// 	struct intr_frame if_;
-// 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-// 	struct intr_frame *parent_if;
-// 	bool succ = true;
+static void __do_fork(void *aux) {
+	struct thread *curr = thread_current();
+	struct thread *parent = (struct thread *)aux;
+	struct intr_frame if_;
+	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
+	struct intr_frame *parent_if;
+	bool succ = true;
 
-// 	parent_if = &parent -> parent_if;
+	parent_if = &parent -> parent_if;
 
-// #ifdef DEBUG
-// 		printf("[Fork] Forking from %s to %s\n", parent -> name, curr -> name);
-// #endif
+#ifdef DEBUG
+		printf("[Fork] Forking from %s to %s\n", parent -> name, curr -> name);
+#endif
 
-// 	/* 1. Read the cpu context to local stack. */
-// 	memcpy (&if_, parent_if, sizeof(struct intr_frame));
-// 	if_.R.rax = 0;
+	/* 1. Read the cpu context to local stack. */
+	memcpy (&if_, parent_if, sizeof(struct intr_frame));
+	if_.R.rax = 0;
 
-// 	/* 2. Duplicate PT */
-// 	curr -> pml4 = pml4_create();
-// 	if (curr -> pml4 == NULL)
-// 		goto error;
+	/* 2. Duplicate PT */
+	curr -> pml4 = pml4_create();
+	if (curr -> pml4 == NULL)
+		goto error;
 
-// 	process_activate(curr);
+	process_activate(curr);
 
-// #ifdef VM
-// 	supplemental_page_table_init(&curr -> spt);
-// 	if (!supplemental_page_table_copy(&curr -> spt, &parent -> spt))
-// 		goto error;
-// #else
-// 	if (!pml4_for_each(parent -> pml4, duplicate_pte, parent))
-// 		goto error;
-// #endif
+#ifdef VM
+	supplemental_page_table_init(&curr -> spt);
+	if (!supplemental_page_table_copy(&curr -> spt, &parent -> spt))
+		goto error;
+#else
+	if (!pml4_for_each(parent -> pml4, duplicate_pte, parent))
+		goto error;
+#endif
 
-// 	/* TODO: Your code goes here.
-// 	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
-// 	 * TODO:       in include/filesys/file.h. Note that parent should not return
-// 	 * TODO:       from the fork() until this function successfully duplicates
-// 	 * TODO:       the resources of parent.*/
-// 	if (parent -> fd_idx = FDCOUNT_LIMIT)
-// 		goto error;
+	/* TODO: Your code goes here.
+	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
+	 * TODO:       in include/filesys/file.h. Note that parent should not return
+	 * TODO:       from the fork() until this function successfully duplicates
+	 * TODO:       the resources of parent.*/
+	if (parent -> fd_idx = FDCOUNT_LIMIT)
+		goto error;
 	
-// 	const int MAPLEN = 10;
-// 	int dup_count = 0;
-// 	struct map_elem map[10];
+	const int MAPLEN = 10;
+	int dup_count = 0;
+	struct map_elem map[10];
 	
-// 	for (int i = 0; i < FDCOUNT_LIMIT; i++) {
-// 		struct file *file = parent -> fd_table[i];
+	for (int i = 0; i < FDCOUNT_LIMIT; i++) {
+		struct file *file = parent -> fd_table[i];
 
-// 		if (file == NULL)
-// 			continue;
+		if (file == NULL)
+			continue;
 		
-// 		bool found = false;
+		bool found = false;
 
-// 		for (int j = 0; j < MAPLEN; j++) {
-// 			if (map[j].key == file) {
-// 				found = true;
-// 				curr -> fd_table[i] = map[j].value;
-// 				break;
-// 			}
-// 		}
+		for (int j = 0; j < MAPLEN; j++) {
+			if (map[j].key == file) {
+				found = true;
+				curr -> fd_table[i] = map[j].value;
+				break;
+			}
+		}
 
-// 		if (!found) {
-// 			struct file *new_file;
+		if (!found) {
+			struct file *new_file;
 
-// 			if (file > 2)
-// 				new_file = file_duplicate(file);
+			if (file > 2)
+				new_file = file_duplicate(file);
+
+			else
+				new_file = file;
 			
-// 			else
-// 				new_file = file;
-			
-// 			curr -> fd_table[i] = new_file;
+			curr -> fd_table[i] = new_file;
 
-// 			if (dup_count < MAPLEN) {
-// 				map[dup_count].key = file;
-// 				map[dup_count++].value = new_file;
-// 			}
-// 		}
-// 	}
+			if (dup_count < MAPLEN) {
+				map[dup_count].key = file;
+				map[dup_count++].value = new_file;
+			}
+		}
+	}
 
-// 	curr -> fd_idx = parent -> fd_idx;
+	curr -> fd_idx = parent -> fd_idx;
 
-// #ifdef DEBUG
-// 		printf("[do_fork] %s Ready to switch\n", curr -> name));
-// #endif
+#ifdef DEBUG
+		printf("[do_fork] %s Ready to switch\n", curr -> name));
+#endif
 
-// 	sema_up(&curr -> fork_sema);
+	sema_up(&curr -> fork_sema);
 
-// 	/* Finally, switch to the newly created process. */
-// 	if (succ)
-// 		do_iret(&if_);
+	/* Finally, switch to the newly created process. */
+	if (succ)
+		do_iret(&if_);
 
-// // error:
-// 	curr -> exit_status = TID_ERROR;
-// 	sema_up(&curr -> fork_sema);
-// 	exit(TID_ERROR);
-// }
+error:
+	curr -> exit_status = TID_ERROR;
+	sema_up(&curr -> fork_sema);
+	exit(TID_ERROR);
+}
 
 /* Switch the current execution context to the f_name.
  * Returns -1 on fail. */
@@ -521,22 +522,22 @@ int process_wait(tid_t child_tid UNUSED) {
 
 /* Exit the process. This function is called by thread_exit (). */
 void process_exit(void) {
-	// struct thread *curr = thread_current();
+	struct thread *curr = thread_current();
 
-	// for (int i = 0; i < FDCOUNT_LIMIT; i++) {
-	// 	close(i);
-	// }
+	for (int i = 0; i < FDCOUNT_LIMIT; i++) {
+		close(i);
+	}
 
-	// palloc_free_multiple(curr -> fd_table, FDT_PAGES);
+	palloc_free_multiple(curr -> fd_table, FDT_PAGES);
 
-	// /* Destroy the current process's page directory
-	// and switch back to the kernel-only page directory */
-	// file_close(curr -> running);
+	/* Destroy the current process's page directory
+	and switch back to the kernel-only page directory */
+	file_close(curr -> running);
 
-	// process_cleanup();
+	process_cleanup();
 
-	// sema_up(&curr -> wait_sema);
-	// sema_down(&curr -> free_sema);
+	sema_up(&curr -> wait_sema);
+	sema_down(&curr -> free_sema);
 }
 
 /* Free the current process's resources. */
@@ -544,7 +545,7 @@ static void process_cleanup(void) {
 	struct thread *curr = thread_current();
 
 #ifdef VM
-	supplemental_page_table_kill(&curr->spt);
+	supplemental_page_table_kill(&curr -> spt);
 #endif
 
 	uint64_t *pml4;
@@ -581,7 +582,7 @@ void process_activate(struct thread *next) {
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
 static bool load(const char *file_name, struct intr_frame *if_) {
-	struct thread *t = thread_current();
+	struct thread *curr = thread_current();
 	struct ELF ehdr;
 	struct file *file = NULL;
 	off_t file_ofs;
@@ -589,9 +590,9 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 	int i;
 
 	/* Allocate and activate page directory. */
-	t -> pml4 = pml4_create();
+	curr -> pml4 = pml4_create();
 
-	if (t -> pml4 == NULL)
+	if (curr -> pml4 == NULL)
 		goto done;
 	
 	process_activate(thread_current());
@@ -604,7 +605,7 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
-	t -> running = file;
+	curr -> running = file;
 	file_deny_write(file);
 
 	/* Read and verify executable header. */
@@ -787,6 +788,7 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 			palloc_free_page(kpage);
 			return false;
 		}
+
 		memset(kpage + page_read_bytes, 0, page_zero_bytes);
 
 		/* Add the page to the process's address space. */
@@ -867,8 +869,6 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs(upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
-
-	file+seek(file, ofs);
 
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.

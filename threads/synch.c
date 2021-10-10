@@ -38,24 +38,33 @@ struct semaphore_elem {
 	struct semaphore semaphore;         /* This semaphore. */
 };
 
-void sema_init (struct semaphore *sema, unsigned value);
-void sema_down(struct semaphore *sema);
-bool sema_try_down(struct semaphore *sema);
-void sema_up(struct semaphore *sema);
-void sema_self_test(void);
-static void sema_test_helper(void *sema_);
-bool compare_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+// void sema_init(struct semaphore *sema, unsigned value);
+// void sema_down(struct semaphore *sema);
+// bool sema_try_down(struct semaphore *sema);
+// void sema_up(struct semaphore *sema);
+// void sema_self_test(void);
+// static void sema_test_helper(void *sema_);
+// bool compare_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
-void lock_init(struct lock *lock);
-void lock_acquire(struct lock *lock);
-bool lock_try_acquire(struct lock *lock);
-void lock_release(struct lock *lock);
-bool lock_held_by_current_thread(const struct lock *lock);
+// void lock_init(struct lock *lock);
+// void lock_acquire(struct lock *lock);
+// bool lock_try_acquire(struct lock *lock);
+// void lock_release(struct lock *lock);
+// bool lock_held_by_current_thread(const struct lock *lock);
 
-void cond_init(struct condition *cond);
-void cond_wait(struct condition *cond, struct lock *lock);
-void cond_signal(struct condition *cond, struct lock *lock UNUSED);
-void cond_broadcast (struct condition *cond, struct lock *lock);
+// void cond_init(struct condition *cond);
+// void cond_wait(struct condition *cond, struct lock *lock);
+// void cond_signal(struct condition *cond, struct lock *lock UNUSED);
+// void cond_broadcast (struct condition *cond, struct lock *lock);
+
+bool compare_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux) {
+	struct semaphore_elem *wait_a = list_entry(a, struct semaphore_elem, elem);
+	struct semaphore_elem *wait_b = list_entry(b, struct semaphore_elem, elem);
+	struct thread *thread_a = list_entry(list_front(&wait_a -> semaphore.waiters), struct thread, elem);
+	struct thread *thread_b = list_entry(list_front(&wait_b -> semaphore.waiters), struct thread, elem);
+
+	return thread_a -> priority > thread_b -> priority;
+}
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -120,7 +129,6 @@ bool sema_try_down(struct semaphore *sema) {
 		success = false;
 
 	intr_set_level(old_level);
-
 	return success;
 }
 
@@ -151,11 +159,11 @@ void sema_up(struct semaphore *sema) {
 	intr_set_level(old_level);
 }
 
-static void sema_test_helper(void *sema_);
-
 /* Self-test for semaphores that makes control "ping-pong"
    between a pair of threads.  Insert calls to printf() to see
    what's going on. */
+static void sema_test_helper(void *sema_);
+
 void sema_self_test(void) {
 	struct semaphore sema[2];
 	int i;
@@ -182,15 +190,6 @@ static void sema_test_helper(void *sema_) {
 		sema_down(&sema[0]);
 		sema_up(&sema[1]);
 	}
-}
-
-bool compare_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux) {
-	struct semaphore_elem *wait_a = list_entry(a, struct semaphore_elem, elem);
-	struct semaphore_elem *wait_b = list_entry(b, struct semaphore_elem, elem);
-	struct thread *thread_a = list_entry(list_front(&wait_a -> semaphore.waiters), struct thread, elem);
-	struct thread *thread_b = list_entry(list_front(&wait_b -> semaphore.waiters), struct thread, elem);
-
-	return thread_a -> priority > thread_b -> priority;
 }
 
 /* Initializes LOCK.  A lock can be held by at most a single

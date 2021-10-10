@@ -392,7 +392,8 @@ void thread_set_priority(int new_priority) {
 	intr_set_level(old_level);
 
 	if (list_size(&ready_list)) {
-		if (new_priority < list_entry(list_front(&ready_list), struct thread, elem))
+		struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
+		if (new_priority < t -> priority)
 			thread_yield();
 	}
 }
@@ -407,7 +408,9 @@ void thread_set_nice(int nice UNUSED) {
 	thread_current() -> nice = nice;
 	update_thread_priority(thread_current());
 
-	if (thread_get_priority() < list_entry(list_head(&ready_list), struct thread, elem) -> priority)
+	struct thread *t = list_entry(list_head(&ready_list), struct thread, elem);
+
+	if (thread_get_priority() < t -> priority)
 		thread_yield();
 }
 
@@ -723,12 +726,13 @@ int64_t thread_wakeup(void) {
 		return -1;
 	
 	else {
-		return list_entry(list_front(&sleep_list), struct thread, elem) -> end_tick;
+		struct thread *th = list_entry(list_front(&sleep_list), struct thread, elem);
+		return th -> end_tick;
 	}
 }
 
 void nested_donation(struct thread *t, int new_priority) {
-	if (t -> waiting_lock = NULL || t -> waiting_lock == 0) {
+	if (t -> waiting_lock == NULL || t -> waiting_lock == 0) {
 		list_sort(&ready_list, compare_thread_priority , NULL);
 		return;
 	}
