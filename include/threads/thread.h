@@ -118,17 +118,17 @@ struct thread {
 	int exit_status;
 	struct semaphore wait_sema;
 
-	struct semaphore fork_sema;
-	struct semaphore free_sema;
-	struct intr_frame parent_if;
+	// struct semaphore fork_sema;
+	// struct semaphore free_sema;
+	// struct intr_frame parent_if;
 
-	int fd_idx;
-	struct file **fd_table;
+	// int fd_idx;
+	// struct file **fd_table;
 
 	struct file *running;
 
-	int stdin_count;
-	int stdout_count;
+	// int stdin_count;
+	// int stdout_count;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

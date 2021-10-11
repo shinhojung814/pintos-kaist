@@ -44,12 +44,12 @@
 #define PF_R 4          /* Readable. */
 
 /* Abbreviations */
-#define ELF ELF64_HDR
-#define PHDR ELF64_PHDR
+#define ELF ELF64_Hdr
+#define phdr ELF64_PHDR
 
 /* Executable header.  See [ELF1] 1-4 to 1-8.
  * This appears at the very beginning of an ELF binary. */
-struct ELF64_HDR {
+struct ELF64_Hdr {
 	unsigned char e_ident[EI_NIDENT];
 	uint16_t e_type;
 	uint16_t e_machine;
@@ -82,19 +82,11 @@ struct map_elem {
 	uintptr_t value;
 };
 
-const int MAPLEN = 10;
-int dup_count = 0;
-struct map_elem map[10];
-
-static bool setup_stack(struct intr_frame *if_);
-static bool validate_segment(const struct PHDR *phdr, struct file *file);
-static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
-		uint32_t read_bytes, uint32_t zero_bytes, bool writable);
-
 static void process_init(void);
 tid_t process_create_initd(const char *file_name);
 static void initd(void *f_name);
-tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED);
+struct thread *get_child_with_pid(int pid);
+tid_t process_fork(const char *name, struct intr_frame *if_);
 static bool duplicate_pte (uint64_t *pte, void *va, void *aux);
 static void __do_fork(void *aux);
 int process_exec(void *f_name);
@@ -105,9 +97,11 @@ void process_activate(struct thread *next);
 static bool load(const char *file_name, struct intr_frame *if_);
 static bool install_page(void *upage, void *kpage, bool writable);
 static bool load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable);
+static bool validate_segment(const struct phdr *phdr, struct file *file);
 static bool setup_stack(struct intr_frame *if_);
 static bool install_page(void *upage, void *kpage, bool writable);
-// void argument_stack(int argc, char **argv, struct intr_frame *if_);
+
+void argument_stack(char **argv, int argc, void **rspp);
 
 /* General process initializer for initd and other process. */
 static void process_init(void) {
@@ -149,14 +143,14 @@ static void initd(void *f_name) {
 #ifdef VM
 	supplemental_page_table_init(&thread_current() -> spt);
 #endif
-
+	
 	if (process_exec(f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	
 	NOT_REACHED();
 }
 
-struct thread *get_child_with_pid(int pid) {
+struct thread *get_child_process(int pid) {
 	struct thread *curr = thread_current();
 	struct list *child_list = &curr -> child_list;
 
@@ -164,44 +158,32 @@ struct thread *get_child_with_pid(int pid) {
 	printf(%d, list_size(child_list));
 #endif
 
+	/* 자식 리스트 child_list에 접근하여 프로세스 디스크립터 검색 */
 	for (struct list_elem *e = list_begin(child_list); e != list_end(child_list); e = list_next(e)) {
 		struct thread *t = list_entry(e, struct thread, child_elem);
 
+		/* 해당 pid가 존재하면 프로세스 디스크립터 반환 */
 		if (t -> tid == pid)
 			return t;
 	}
 
+	/* 리스트에 존재하지 않으면 NULL 리턴 */
 	return NULL;
 }
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
  * TID_ERROR if the thread cannot be created. */
-tid_t process_fork(const char *name, struct intr_frame *if_) {
+tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
 	struct thread *curr = thread_current();
 
-	memcpy(&curr -> parent_if, if_, sizeof(struct intr_frame));
-
 	tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, curr);
-
-	if (tid == TID_ERROR)
-		return TID_ERROR;
-	
-	struct thread *child = get_child_with_pid(tid);
-	
-	sema_down(&child -> fork_sema);
-
-	if (child -> exit_status == -1)
-		return TID_ERROR;
-
-#ifdef DEBUG_WAIT
-	printf("[process_fork] pid %d : child %s\n", tid, child -> name);
-#endif
 
 	return tid;
 }
 
 #ifndef VM
+
 /* Duplicate the parent's address space by passing this function to the
  * pml4_for_each. This is only for the project 2. */
 static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
@@ -212,66 +194,21 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
-	if (is_kernel_vaddr(va)) {
-#ifdef DEBUG
-		printf("[fork-duplicate] fail at step 1 %11x\n", va)
-#endif
-		return true;
-	}
-
-	else {
-#ifdef DEBUG
-		printf("[fork-duplicate] pass at step 1 %11x\n", va);
-#endif
-	}
-
-#ifdef DEBUG
-		printf("Is user %d, is kernel %d, writable %d\n", is_user_pte(pte), is_kern_pte(pte), is_writable(pte));
-#endif
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page(parent -> pml4, va);
-
-	if (parent_page == NULL) {
-		printf("[fork-duplicate] failed to fetch page for user vaddr 'va'\n");
-		return false;
-	}
-
-#ifdef DEBUG
-	void *test = ptov(PTE_ADDR(*pte)) + pg_ofs(va);
-	uint64_t va_offset = pg_ofs(va);
-#endif
-
+	
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
-	new_page = palloc_get_page(PAL_USER);
-
-	if (new_page == NULL) {
-		printf("[fork-duplicate] failed to palloc new page\n");
-		return false;
-	}
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
-	memcpy(new_page, parent_page, PGSIZE);
-	writable = is_writable(pte);
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
-	if (!pml4_set_page(curr -> pml4, va, new_page, writable)) {
 
-		/* 6. TODO: if fail to insert page, do error handling. */
-		printf("Failed to map user virtual to given physical frame\n");
-		return false;
-	}
-
-#ifdef DEBUG
-	if (pml4_get_page(curr -> pml4, va) != new_page)
-		printf("Not mapped");
-	
-	printf("Completed copy\n");
-#endif
+	/* 6. TODO: if fail to insert page, do error handling. */
 	
 	return true;
 }
@@ -289,15 +226,8 @@ static void __do_fork(void *aux) {
 	struct intr_frame *parent_if;
 	bool succ = true;
 
-	parent_if = &parent -> parent_if;
-
-#ifdef DEBUG
-		printf("[Fork] Forking from %s to %s\n", parent -> name, curr -> name);
-#endif
-
 	/* 1. Read the cpu context to local stack. */
 	memcpy (&if_, parent_if, sizeof(struct intr_frame));
-	if_.R.rax = 0;
 
 	/* 2. Duplicate PT */
 	curr -> pml4 = pml4_create();
@@ -320,63 +250,15 @@ static void __do_fork(void *aux) {
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
-	if (parent -> fd_idx = FDCOUNT_LIMIT)
-		goto error;
-	
-	const int MAPLEN = 10;
-	int dup_count = 0;
-	struct map_elem map[10];
-	
-	for (int i = 0; i < FDCOUNT_LIMIT; i++) {
-		struct file *file = parent -> fd_table[i];
 
-		if (file == NULL)
-			continue;
-		
-		bool found = false;
-
-		for (int j = 0; j < MAPLEN; j++) {
-			if (map[j].key == file) {
-				found = true;
-				curr -> fd_table[i] = map[j].value;
-				break;
-			}
-		}
-
-		if (!found) {
-			struct file *new_file;
-
-			if (file > 2)
-				new_file = file_duplicate(file);
-
-			else
-				new_file = file;
-			
-			curr -> fd_table[i] = new_file;
-
-			if (dup_count < MAPLEN) {
-				map[dup_count].key = file;
-				map[dup_count++].value = new_file;
-			}
-		}
-	}
-
-	curr -> fd_idx = parent -> fd_idx;
-
-#ifdef DEBUG
-		printf("[do_fork] %s Ready to switch\n", curr -> name));
-#endif
-
-	sema_up(&curr -> fork_sema);
+	process_init();
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret(&if_);
 
 error:
-	curr -> exit_status = TID_ERROR;
-	sema_up(&curr -> fork_sema);
-	exit(TID_ERROR);
+	thread_exit();
 }
 
 /* Switch the current execution context to the f_name.
@@ -428,7 +310,7 @@ int process_exec(void *f_name) {
 
 	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)*rspp, true);
 
-	palloc_free_page(file_name); 
+	palloc_free_page(file_name);
 	
 	/* Start switched process. */
 	do_iret(&_if);
@@ -486,36 +368,16 @@ int process_wait(tid_t child_tid UNUSED) {
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
 	struct thread *curr = thread_current();
-
-#ifdef DEBUG_WAIT
-	printf("\nparent children #: %d\n", list_size(&curr -> child_list));
-	printf("HEAD");
-
-	for (struct list_elem *e = list_begin(&curr -> child_list); e != list_end(&curr -> child_list); e = list_next(e)) {
-		printf("%llx - ", e);
-	}
-	printf("TAIL\n");
-#endif
-	
-	struct thread *child = get_child_with_pid(child_tid);
+	struct thread *child = get_child_process(child_tid);
 
 	if (child == NULL)
 		return -1;
-
-#ifdef DEBUG_WAIT
-	printf("Current thread %s waits child thread %s - ", curr -> name, child -> name);
-#endif
 	
 	sema_down(&child -> wait_sema);
 
 	int exit_status = child -> exit_status;
-
-#ifdef DEBUG
-		printf("[process_wait] Child %d %s: exit_status - %d\n", child_tid, child -> name, exit_status);
-#endif
 	
 	list_remove(&child -> child_elem);
-	sema_up(&child -> free_sema);
 
 	return exit_status;
 }
@@ -524,21 +386,16 @@ int process_wait(tid_t child_tid UNUSED) {
 void process_exit(void) {
 	struct thread *curr = thread_current();
 
-	for (int i = 0; i < FDCOUNT_LIMIT; i++) {
-		close(i);
-	}
-
-	palloc_free_multiple(curr -> fd_table, FDT_PAGES);
-
 	/* Destroy the current process's page directory
 	and switch back to the kernel-only page directory */
-	file_close(curr -> running);
 
 	process_cleanup();
 
 	sema_up(&curr -> wait_sema);
-	sema_down(&curr -> free_sema);
 }
+
+	/* Destroy the current process's page directory
+	and switch back to the kernel-only page directory */
 
 /* Free the current process's resources. */
 static void process_cleanup(void) {
@@ -614,7 +471,7 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 			|| ehdr.e_type != 2
 			|| ehdr.e_machine != 0x3E // amd64
 			|| ehdr.e_version != 1
-			|| ehdr.e_phentsize != sizeof(struct PHDR)
+			|| ehdr.e_phentsize != sizeof(struct phdr)
 			|| ehdr.e_phnum > 1024) {
 		printf("Load: %s: Error loading executable\n", file_name);
 		goto done;
@@ -624,7 +481,7 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 	file_ofs = ehdr.e_phoff;
 
 	for (i = 0; i < ehdr.e_phnum; i++) {
-		struct PHDR phdr;
+		struct phdr phdr;
 
 		if (file_ofs < 0 || file_ofs > file_length(file))
 			goto done;
@@ -693,13 +550,13 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
+	file_close(file);
 	return success;
 }
 
-
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */
-static bool validate_segment(const struct PHDR *phdr, struct file *file) {
+static bool validate_segment(const struct phdr *phdr, struct file *file) {
 	/* p_offset and p_vaddr must have the same page offset. */
 	if ((phdr -> p_offset & PGMASK) != (phdr -> p_vaddr & PGMASK))
 		return false;
@@ -766,7 +623,7 @@ static bool install_page(void *upage, void *kpage, bool writable);
 static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
-	ASSERT (pg_ofs (upage) == 0);
+	ASSERT (pg_ofs(upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
 	file_seek(file, ofs);
@@ -784,7 +641,7 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 			return false;
 
 		/* Load this page. */
-		if (file_read(file, kpage, page_read_bytes) != (int) page_read_bytes) {
+		if (file_read(file, kpage, page_read_bytes) != (int)page_read_bytes) {
 			palloc_free_page(kpage);
 			return false;
 		}

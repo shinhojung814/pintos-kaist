@@ -242,16 +242,16 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
 	/* Initialize thread. */
 	init_thread(t, name, priority);
 
-	t -> fd_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	// t -> fd_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
 
-	if (t -> fd_table == NULL)
-		return TID_ERROR;
+	// if (t -> fd_table == NULL)
+	// 	return TID_ERROR;
 	
-	t -> fd_idx = 2;
-	t -> fd_table[0] = 1;
-	t -> fd_table[1] = 2;
-	t -> stdin_count = 1;
-	t -> stdout_count = 1;
+	// t -> fd_idx = 2;
+	// t -> fd_table[0] = 1;
+	// t -> fd_table[1] = 2;
+	// t -> stdin_count = 1;
+	// t -> stdout_count = 1;
 
 	if (thread_mlfqs) {
 		t -> nice = 0;
@@ -500,8 +500,8 @@ static void init_thread(struct thread *t, const char *name, int priority) {
 
 	list_init(&t -> child_list);
 	sema_init(&t -> wait_sema, 0);
-	sema_init(&t -> fork_sema, 0);
-	sema_init(&t -> free_sema, 0);
+	// sema_init(&t -> fork_sema, 0);
+	// sema_init(&t -> free_sema, 0);
 
 	t -> running = NULL;
 }
