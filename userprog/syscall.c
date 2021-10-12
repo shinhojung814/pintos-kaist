@@ -36,11 +36,10 @@ unsigned tell(int fd);
 void close(int fd);
 
 void check_address(const uint64_t *uaddr);
-int add_file_to_fdt(struct file *file);
-void remove_file_from_fdt(int fd);
+int process_add_file(struct file *file);
+static struct file *process_get_file(int fd);
+void process_close_file(int fd);
 int dup2(int old_fd, int new_fd);
-
-static struct file *find_file_by_fd(int fd);
 
 /* System call.
  *
@@ -141,47 +140,6 @@ void syscall_handler(struct intr_frame *f UNUSED) {
 	thread_exit();
 }
 
-/* Checks validity of given user virtual address */
-void check_address(const uint64_t *uaddr) {
-	struct thread *curr = thread_current();
-
-	if (uaddr == NULL || !(is_user_vaddr(uaddr)) || pml4_get_page(curr -> pml4, uaddr) == NULL) {
-		exit(-1);
-	}
-}
-
-// static struct file *find_file_by_fd(int fd) {
-// 	struct thread *curr = thread_current();
-
-// 	if (fd < 0 || fd >= FDCOUNT_LIMIT)
-// 		return NULL;
-	
-// 	return curr -> fd_table[fd];
-// }
-
-// int add_file_to_fdt(struct file *file) {
-// 	struct thread *curr = thread_current();
-// 	struct file **fdt = curr -> fd_table;
-
-// 	while (curr ->fd_idx < FDCOUNT_LIMIT && fdt[curr -> fd_idx])
-// 		curr -> fd_idx++;
-	
-// 	if (curr -> fd_idx >= FDCOUNT_LIMIT)
-// 		return -1;
-	
-// 	fdt[curr -> fd_idx] = file;
-// 	return curr -> fd_idx;
-// }
-
-// void remove_file_from_fdt(int fd) {
-// 	struct thread *curr = thread_current();
-
-// 	if (fd < 0 || fd >= FDCOUNT_LIMIT)
-// 		return;
-	
-// 	curr -> fd_table[fd] = NULL;
-// }
-
 /* Terminates the operating system by calling power_off() */
 void halt(void) {
 	power_off();
@@ -197,155 +155,222 @@ void exit(int status) {
 	thread_exit();
 }
 
+/* Checks validity of given user virtual address */
+void check_address(const uint64_t *uaddr) {
+	struct thread *curr = thread_current();
+
+	if (uaddr == NULL || !(is_user_vaddr(uaddr)) || pml4_get_page(curr -> pml4, uaddr) == NULL) {
+		exit(-1);
+	}
+}
+
 /* Creates a new file and returns initial size in bytes */
 bool create(const char *file, unsigned initial_size) {
-	// check_address(file);
-	// return filesys_create(file, initial_size);
+	check_address(file);
+	return filesys_create(file, initial_size);
 }
 
 /* Deletes a file and returns true if done successfully */
 bool remove(const char *file) {
-	// check_address(file);
-	// return filesys_remove(file);
+	check_address(file);
+	return filesys_remove(file);
+}
+
+int process_add_file(struct file *file) {
+	struct thread *curr = thread_current();
+	struct file **fdt = curr ->fd_table;
+
+	while (curr -> fd_idx < FDCOUNT_LIMIT && fdt[curr -> fd_idx])
+		curr -> fd_idx++;
+	
+	if (curr -> fd_idx >= FDCOUNT_LIMIT)
+		return -1;
+	
+	fdt[curr -> fd_idx] = file;
+	return curr -> fd_idx;
+}
+
+static struct file *process_get_file(int fd) {
+	struct thread *curr = thread_current();
+
+	if (fd <= 0 || fd >= FDCOUNT_LIMIT)
+		return NULL;
+	
+	return curr -> fd_table[fd];
+}
+
+void process_close_file(int fd) {
+	struct thread *curr = thread_current();
+
+	if (fd < 0 || fd >= FDCOUNT_LIMIT)
+		return;
+	
+	curr -> fd_table[fd] = NULL;
 }
 
 /* Opens a file and returns fd if done successfully */
 int open(const char *file) {
-	// check_address(file);
+	check_address(file);
 
-	// struct file *file_object = filesys_open(file);
+	struct file *file_object = filesys_open(file);
 
-	// if (file_object == NULL)
-	// 	return -1;
+	if (file_object == NULL)
+		return -1;
+
+	int fd = process_add_file(file_object);
+
+	if (fd == -1)
+		file_close(file_object);
 	
-	// int fd = add_file_to_fdt(file_object);
-
-	// if (fd == -1)
-	// 	file_close(file_object);
-	
-	// return fd;
+	return fd;
 }
 
 /* Returns a size of opened file as fd */
 int filesize(int fd) {
-	// struct file *file_object = find_file_by_fd(fd);
+	struct file *file_object = process_get_file(fd);
 
-	// if (file_object == NULL)
-	// 	return -1;
+	if (file_object == NULL)
+		return -1;
 	
-	// return file_length(file_object);
+	return file_length(file_object);
 }
 
 /* Reads size bytes from the file opened as fd into buffer and returns the number of bytes read */
 int read(int fd, void *buffer, unsigned size) {
-	// check_address(buffer);
+	check_address(buffer);
 
-	// int ret;
-	// struct thread *curr = thread_current();
+	int bytes;
+	struct thread *curr = thread_current();
 
-	// struct file *file_object = find_file_by_fd(fd);
+	struct file *file_object = process_get_file(fd);
 
-	// if (file_object == NULL)
-	// 	return -1;
+	if (file_object == NULL)
+		return -1;
 	
-	// if (file_object == STDIN) {
-	// 	if (curr -> stdin_count == 0) {
-	// 		NOT_REACHED();
-	// 		remove_file_from_fdt(fd);
-	// 		ret = -1;
-	// 	}
+	if (file_object == STDIN) {
+		if (curr -> stdin_count == 0) {
+			NOT_REACHED();
+			process_close_file(fd);
+			bytes = -1;
+		}
 
-	// 	else {
-	// 		int i;
-	// 		unsigned char *buf = buffer;
+		else {
+			int i;
+			unsigned char *buf = buffer;
 
-	// 		for (i = 0; i < size; i++) {
-	// 			char c = input_getc();
-	// 			*buf++ = c;
+			for (i = 0; i < size; i++) {
+				char c = input_getc();
+				*buf++ = c;
 
-	// 			if (c == '\0')
-	// 				break;
-	// 		}
-	// 		ret = i;
-	// 	}
-	// }
+				if (c == '\0')
+					break;
+			}
+			bytes = i;
+		}
+	}
 
-	// else if (file_object == STDOUT) {
-	// 	ret = -1;
-	// }
+	else if (file_object == STDOUT) {
+		bytes = -1;
+	}
 
-	// else {
-	// 	lock_acquire(&file_rw_lock);
-	// 	ret = file_read(file_object, buffer, size);
-	// 	lock_release(&file_rw_lock);
-	// }
-	// return ret;
+	else {
+		lock_acquire(&file_lock);
+		bytes = file_read(file_object, buffer, size);
+		lock_release(&file_lock);
+	}
+	return bytes;
 }
 
 /* Writes size bytes from buffer to the open file and return the number of bytes written */
 int write(int fd, const void *buffer, unsigned size) {
-	// check_address(buffer);
+	check_address(buffer);
 
-	// int ret;
-	// struct file *file_object = find_file_by_fd(fd);
+	int bytes;
+	struct file *file_object = process_get_file(fd);
 
-	// if (file_object = NULL)
-	// 	return -1;
+	if (file_object = NULL)
+		return -1;
 	
-	// struct thread *curr = thread_current();
+	struct thread *curr = thread_current();
 
-	// if (file_object == STDOUT) {
-	// 	if (curr -> stdout_count == 0) {
-	// 		NOT_REACHED();
-	// 		remove_file_from_fdt(fd);
-	// 		ret = -1;
-	// 	}
+	if (file_object == STDOUT) {
+		if (curr -> stdout_count == 0) {
+			NOT_REACHED();
+			process_close_file(fd);
+			bytes = -1;
+		}
 
-	// 	else {
-	// 		putbuf(buffer, size);
-	// 		ret = size;
-	// 	}
-	// }
+		else {
+			putbuf(buffer, size);
+			bytes = size;
+		}
+	}
 
-	// else if (file_object == STDIN){
-	// 	ret = -1;
-	// }
+	else if (file_object == STDIN){
+		bytes = -1;
+	}
 
-	// else {
-	// 	lock_acquire(&file_rw_lock);
-	// 	ret = file_write(file_object, buffer, size);
-	// 	lock_release(&file_rw_lock);
-	// }
+	else {
+		lock_acquire(&file_lock);
+		bytes = file_write(file_object, buffer, size);
+		lock_release(&file_lock);
+	}
 
 	// return ret;
 	putbuf(buffer, size);
 
-	return size;
+	return bytes;
 }
 
 /* Changes the next byte to be read or written in open file fd to position */
 void seek(int fd, unsigned position) {
-	// struct file *file_object = find_file_by_fd(fd);
+	struct file *file_object = process_get_file(fd);
 
-	// if (file_object <= 2)
-	// 	return;
+	if (file_object <= 2)
+		return;
 	
 	// file_object -> pos = position;
 }
 
 /* Returns the position of the next byte to be read or written in open file fd */
 unsigned tell(int fd) {
-	// struct file *file_object = find_file_by_fd(fd);
+	struct file *file_object = process_get_file(fd);
 
-	// if (file_object <= 2)
-	// 	return;
+	if (file_object <= 2)
+		return;
 	
-	// return file_tell(file_object);
+	return file_tell(file_object);
 }
 
 /* Closes file descriptor fd */
 void close(int fd) {
-	// struct file *file_object = find_file_by_fd(fd);
+	// struct file *file_object = process_get_file(fd);
+
+	// if (file_object == NULL)
+	// 	return;
+	
+	// struct thread *current = thread_current();
+
+	// if (fd == 0 || file_object == STDIN) {
+	// 	curr -> stdin_count--;
+	// }
+
+	// else if (fd == 1 || file_object == STDOUT) {
+	// 	curr -> stdout_count--;
+	// }
+
+	// process_close_file(fd);
+
+	// if (fd <= 1 || file_object <= 2)
+	// 	return;
+	
+	// if (file_object -> dup_count == 0)
+	// 	file_close(file_object);
+	
+	// else
+	// 	file_object -> dup_count;
+	
+	// struct file *file_object = process_get_file(fd);
 
 	// if (file_object == NULL)
 	// 	return;
@@ -360,7 +385,7 @@ void close(int fd) {
 	// 	curr -> stdout_count--;
 	// }
 
-	// remove_file_from_fdt(fd);
+	// process_close_file(fd);
 
 	// if (fd <= 1 || file_object <= 2)
 	// 	return;
@@ -374,12 +399,12 @@ void close(int fd) {
 
 /* Creates a copy of old_fd into new_fd and closes new_fd if it is open */
 int dup2(int old_fd, int new_fd) {
-	// struct file *file_object = find_file_by_fd(old_fd);
+	// struct file *file_object = process_get_file(old_fd);
 
 	// if (file_object == NULL)
 	// 	return -1;
 	
-	// struct file *dead_file = find_file_by_fd(new_fd);
+	// struct file *dead_file = process_get_file(new_fd);
 
 	// if (old_fd == new_fd)
 	// 	return new_fd;
