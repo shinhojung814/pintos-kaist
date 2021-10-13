@@ -143,7 +143,6 @@ struct list_elem *list_tail(struct list *list) {
 void list_insert(struct list_elem *before, struct list_elem *elem) {
 	ASSERT (is_interior(before) || is_tail(before));
 	ASSERT (elem != NULL);
-
 	elem -> prev = before -> prev;
 	elem -> next = before;
 	before -> prev -> next = elem;
@@ -395,7 +394,7 @@ void list_sort(struct list *list, list_less_func *less, void *aux) {
 /* Inserts ELEM in the proper position in LIST, which must be
    sorted according to LESS given auxiliary data AUX.
    Runs in O(n) average case in the number of elements in LIST. */
-void list_insert_ordered (struct list *list, struct list_elem *elem, list_less_func *less, void *aux) {
+void list_insert_ordered(struct list *list, struct list_elem *elem, list_less_func *less, void *aux) {
 	struct list_elem *e;
 
 	ASSERT (list != NULL);

@@ -17,7 +17,7 @@
 const int STDIN = 1;
 const int STDOUT = 2;
 
-void syscall_entry(void UNUSED);
+void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
 
 void halt(void);
@@ -62,13 +62,12 @@ void syscall_init(void) {
 	 * until the syscall_entry swaps the userland stack to the kernel
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK, FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+
+	lock_init(&file_lock);
 }
 
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f UNUSED) {
-	int size;
-	char *fn_copy;
-
 	switch (f -> R.rax) {
 		case SYS_HALT:
 			halt();
@@ -306,7 +305,7 @@ int write(int fd, const void *buffer, unsigned size) {
 		}
 	}
 
-	else if (file_object == STDIN){
+	else if (file_object == STDIN) {
 		bytes = -1;
 	}
 
@@ -315,9 +314,6 @@ int write(int fd, const void *buffer, unsigned size) {
 		bytes = file_write(file_object, buffer, size);
 		lock_release(&file_lock);
 	}
-
-	// return ret;
-	putbuf(buffer, size);
 
 	return bytes;
 }
@@ -329,7 +325,7 @@ void seek(int fd, unsigned position) {
 	if (file_object <= 2)
 		return;
 	
-	// file_object -> pos = position;
+	file_object -> pos = position;
 }
 
 /* Returns the position of the next byte to be read or written in open file fd */
@@ -344,86 +340,60 @@ unsigned tell(int fd) {
 
 /* Closes file descriptor fd */
 void close(int fd) {
-	// struct file *file_object = process_get_file(fd);
+	struct file *file_object = process_get_file(fd);
 
-	// if (file_object == NULL)
-	// 	return;
+	if (file_object == NULL)
+		return;
 	
-	// struct thread *current = thread_current();
+	struct thread *curr = thread_current();
 
-	// if (fd == 0 || file_object == STDIN) {
-	// 	curr -> stdin_count--;
-	// }
+	if (fd == 0 || file_object == STDIN) {
+		curr -> stdin_count--;
+	}
 
-	// else if (fd == 1 || file_object == STDOUT) {
-	// 	curr -> stdout_count--;
-	// }
+	else if (fd == 1 || file_object == STDOUT) {
+		curr -> stdout_count--;
+	}
 
-	// process_close_file(fd);
+	process_close_file(fd);
 
-	// if (fd <= 1 || file_object <= 2)
-	// 	return;
+	if (fd <= 1 || file_object <= 2)
+		return;
 	
-	// if (file_object -> dup_count == 0)
-	// 	file_close(file_object);
+	if (file_object -> dup_count == 0)
+		file_close(file_object);
 	
-	// else
-	// 	file_object -> dup_count;
-	
-	// struct file *file_object = process_get_file(fd);
-
-	// if (file_object == NULL)
-	// 	return;
-	
-	// struct thread *curr = thread_current();
-
-	// if (fd == 0 || file_object == STDIN) {
-	// 	curr -> stdin_count--;
-	// }
-
-	// else if (fd == 1 || file_object == STDOUT) {
-	// 	curr -> stdout_count--;
-	// }
-
-	// process_close_file(fd);
-
-	// if (fd <= 1 || file_object <= 2)
-	// 	return;
-	
-	// if (file_object -> dup_count == 0)
-	// 	file_close(file_object);
-	
-	// else
-	// 	file_object -> dup_count--;
+	else
+		file_object -> dup_count--;
 }
 
 /* Creates a copy of old_fd into new_fd and closes new_fd if it is open */
 int dup2(int old_fd, int new_fd) {
-	// struct file *file_object = process_get_file(old_fd);
+	struct file *file_object = process_get_file(old_fd);
 
-	// if (file_object == NULL)
-	// 	return -1;
+	if (file_object == NULL)
+		return -1;
 	
-	// struct file *dead_file = process_get_file(new_fd);
+	struct file *dead_file = process_get_file(new_fd);
 
-	// if (old_fd == new_fd)
-	// 	return new_fd;
+	if (old_fd == new_fd)
+		return new_fd;
 	
-	// struct thread *curr = thread_current();
-	// struct file **fdt = curr -> fd_table;
+	struct thread *curr = thread_current();
+	struct file **fdt = curr -> fd_table;
 
 	/* Copy STDIN or STDOUT to another file descriptor */
-	// if (file_object == STDIN)
-	// 	curr -> stdin_count++;
+	if (file_object == STDIN)
+		curr -> stdin_count++;
 	
-	// else if (file_object == STDOUT)
-	// 	curr -> stdout_count++;
+	else if (file_object == STDOUT)
+		curr -> stdout_count++;
 	
-	// else
-	// 	file_object -> dup_count++;
+	else
+		file_object -> dup_count++;
 	
-	// close(new_fd);
-	// fdt[new_fd] = file_object;
+	close(new_fd);
+	fdt[new_fd] = file_object;
 	
 	return new_fd;
 }
@@ -437,14 +407,14 @@ tid_t fork(const char *thread_name, struct intr_frame *f) {
 int exec(char *file_name) {
 	check_address(file_name);
 
-	int size = strlen(file_name) + 1;
+	int file_size = strlen(file_name) + 1;
 	char *fn_copy = palloc_get_page(PAL_ZERO);
 
 	if (fn_copy == NULL) {
 		exit(-1);
 	}
 
-	strlcpy(fn_copy, file_name, size);
+	strlcpy(fn_copy, file_name, file_size);
 
 	if (process_exec(fn_copy) == -1)
 		return -1;

@@ -7,7 +7,6 @@
 #include "userprog/process.h"
 #include "userprog/gdt.h"
 #include "userprog/tss.h"
-#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -18,7 +17,6 @@
 #include "threads/thread.h"
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
-#include "threads/synch.h"
 #include "intrinsic.h"
 #ifdef VM
 #include "vm/vm.h"
@@ -85,15 +83,19 @@ struct map_elem {
 static void process_init(void);
 tid_t process_create_initd(const char *file_name);
 static void initd(void *f_name);
-struct thread *get_child_with_pid(int pid);
+struct thread *get_child_process(int pid);
+
 tid_t process_fork(const char *name, struct intr_frame *if_);
 static bool duplicate_pte (uint64_t *pte, void *va, void *aux);
 static void __do_fork(void *aux);
+
 int process_exec(void *f_name);
 int process_wait(tid_t child_tid UNUSED);
+
 void process_exit (void);
 static void process_cleanup(void);
 void process_activate(struct thread *next);
+
 static bool load(const char *file_name, struct intr_frame *if_);
 static bool install_page(void *upage, void *kpage, bool writable);
 static bool load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable);
@@ -143,6 +145,8 @@ static void initd(void *f_name) {
 #ifdef VM
 	supplemental_page_table_init(&thread_current() -> spt);
 #endif
+
+	process_init();
 	
 	if (process_exec(f_name) < 0)
 		PANIC("Fail to launch initd\n");
@@ -191,10 +195,6 @@ tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED) {
 	if (child -> exit_status == -1)
 		return TID_ERROR;
 
-#ifdef DEBUG_WAIT
-	printf("[process_fork] pid %d : child %s\n", tid, child -> name);
-#endif
-
 	return tid;
 }
 
@@ -210,22 +210,41 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
-
+	if (is_kernel_vaddr(va))
+		return true;
+	
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page(parent -> pml4, va);
+
+	if (parent_page == NULL) {
+		printf("[fork-duplicate] failed to fetch page for user vaddr 'va'\n");
+		return false;
+	}
 	
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+	new_page = palloc_get_page(PAL_USER);
+
+	if (new_page = NULL) {
+		printf("[fork-duplicate] failed to palloc new page\n");
+		return false;
+	}
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
+	memcpy(new_page, parent_page, PGSIZE);
+
+	writable = is_writable(pte);
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
+	if (!pml4_set_page(curr -> pml4, va, new_page, writable)) {
+		printf("Failed to map user virtual page to given physical frame\n");
+		return false;
+	}
 
 	/* 6. TODO: if fail to insert page, do error handling. */
-	
 	return true;
 }
 #endif
@@ -242,9 +261,7 @@ static void __do_fork(void *aux) {
 	struct intr_frame *parent_if;
 	bool succ = true;
 
-#ifdef DEBUG
-	printf("[Fork] Forking from %s to %s\n", parent->name, current->name);
-#endif
+	parent_if = &parent -> parent_if;
 
 	/* 1. Read the cpu context to local stack. */
 	memcpy(&if_, parent_if, sizeof(struct intr_frame));
@@ -272,9 +289,52 @@ static void __do_fork(void *aux) {
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 
+	if (parent -> fd_idx = FDCOUNT_LIMIT)
+		goto error;
+
 #ifdef DEBUG
 	printf("[do_fork] %s Ready to switch!\n", current->name);
 #endif
+
+	const int MAPLEN = 10;
+	struct map_elem map[10];
+	int dup_count = 0;
+
+	for (int i = 0; i < FDCOUNT_LIMIT; i++) {
+		struct file *file = parent -> fd_table[i];
+
+		if (file == NULL)
+			continue;
+
+		bool found = false;
+
+		for (int j = 0; j < MAPLEN; j++) {
+			if (map[j].key == file) {
+				found = true;
+				curr -> fd_table[i] = map[j].value;
+				break;
+			}
+		}
+
+		if (!found) {
+			struct file *new_file;
+
+			if (file > 2)
+				new_file = file_duplicate(file);
+			
+			else
+				new_file = file;
+
+			curr -> fd_table[i] = new_file;
+
+			if (dup_count < MAPLEN) {
+				map[dup_count].key = file;
+				map[dup_count++].value = new_file;
+			}
+		}
+	}
+
+	curr -> fd_idx = parent -> fd_idx;
 
 	sema_up(&curr -> fork_sema);
 
@@ -328,7 +388,6 @@ int process_exec(void *f_name) {
 		return -1;
 	}
 	
-	// argument_stack(arg_list, token_count, &_if);
 	void **rspp = &_if.rsp;
 
 	argument_stack(argv, argc, rspp);
@@ -411,17 +470,9 @@ int process_wait(tid_t child_tid UNUSED) {
 	if (child == NULL)
 		return -1;
 
-#ifdef DEBUG_WAIT
-	printf("cur %s waits child %s - ", curr -> name, child -> name);
-#endif
-
 	sema_down(&child -> wait_sema);
 
 	int exit_status = child -> exit_status;
-
-#ifdef DEBUG_WAIT
-	printf("[process_wait] Child %d %s : exit status - %d\n", child_tid, child -> name, exit_status);
-#endif
 	
 	list_remove(&child -> child_elem);
 	sema_up(&child -> free_sema);
@@ -436,8 +487,13 @@ void process_exit(void) {
 	/* Destroy the current process's page directory
 	and switch back to the kernel-only page directory */
 
-	process_cleanup();
+	for (int i = 0; i < FDCOUNT_LIMIT; i++) {
+		close(i);
+	}
 
+	palloc_free_multiple(curr -> fd_table, FDT_PAGES);
+	file_close(curr -> running);
+	process_cleanup();
 	sema_up(&curr -> wait_sema);
 	sema_down(&curr -> free_sema);
 }
@@ -598,7 +654,6 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close(file);
 	return success;
 }
 
@@ -744,6 +799,7 @@ static bool install_page(void *upage, void *kpage, bool writable) {
 	 * address, then map our page there. */
 	return (pml4_get_page(curr -> pml4, upage) == NULL && pml4_set_page(curr -> pml4, upage, kpage, writable));
 }
+
 #else
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the

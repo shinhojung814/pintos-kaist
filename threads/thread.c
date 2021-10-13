@@ -153,8 +153,8 @@ void thread_init(void) {
 
 	/* Init the global thread context */
 	lock_init(&tid_lock);
-	list_init(&sleep_list);
 	list_init(&ready_list);
+	list_init(&sleep_list);
 	list_init(&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -195,10 +195,12 @@ void thread_tick(void) {
 	/* Update statistics. */
 	if (curr == idle_thread)
 		idle_ticks++;
+	
 #ifdef USERPROG
 	else if (curr -> pml4 != NULL)
 		user_ticks++;
 #endif
+
 	else
 		kernel_ticks++;
 
@@ -242,16 +244,16 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
 	/* Initialize thread. */
 	init_thread(t, name, priority);
 
-	// t -> fd_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	t -> fd_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
 
-	// if (t -> fd_table == NULL)
-	// 	return TID_ERROR;
+	if (t -> fd_table == NULL)
+		return TID_ERROR;
 	
-	// t -> fd_idx = 2;
-	// t -> fd_table[0] = 1;
-	// t -> fd_table[1] = 2;
-	// t -> stdin_count = 1;
-	// t -> stdout_count = 1;
+	t -> fd_idx = 2;
+	t -> fd_table[0] = 1;
+	t -> fd_table[1] = 2;
+	t -> stdin_count = 1;
+	t -> stdout_count = 1;
 
 	if (thread_mlfqs) {
 		t -> nice = 0;
@@ -262,6 +264,7 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
 	tid = t -> tid = allocate_tid();
 
 	struct thread *curr = thread_current();
+	
 	list_push_back(&curr -> child_list, &t -> child_elem);
 
 	/* Call the kernel_thread if it scheduled.
@@ -393,6 +396,7 @@ void thread_set_priority(int new_priority) {
 
 	if (list_size(&ready_list)) {
 		struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
+
 		if (new_priority < t -> priority)
 			thread_yield();
 	}
@@ -407,10 +411,8 @@ int thread_get_priority(void) {
 void thread_set_nice(int nice UNUSED) {
 	thread_current() -> nice = nice;
 	update_thread_priority(thread_current());
-
-	struct thread *t = list_entry(list_head(&ready_list), struct thread, elem);
-
-	if (thread_get_priority() < t -> priority)
+	
+	if (thread_get_priority() < list_entry(list_head(&ready_list), struct thread, elem) -> priority)
 		thread_yield();
 }
 
@@ -514,6 +516,7 @@ static void init_thread(struct thread *t, const char *name, int priority) {
 static struct thread *next_thread_to_run(void) {
 	if (list_empty(&ready_list))
 		return idle_thread;
+	
 	else
 		return list_entry(list_pop_front(&ready_list), struct thread, elem);
 }

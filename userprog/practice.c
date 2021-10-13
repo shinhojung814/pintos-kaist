@@ -44,12 +44,12 @@
 #define PF_R 4          /* Readable. */
 
 /* Abbreviations */
-#define ELF ELF64_Hdr
-#define phdr ELF64_PHDR
+#define ELF ELF64_EHDR
+#define PHDR ELF64_PHDR
 
 /* Executable header.  See [ELF1] 1-4 to 1-8.
  * This appears at the very beginning of an ELF binary. */
-struct ELF64_Hdr {
+struct ELF64_EHDR {
 	unsigned char e_ident[EI_NIDENT];
 	uint16_t e_type;
 	uint16_t e_machine;
@@ -97,7 +97,7 @@ void process_activate(struct thread *next);
 static bool load(const char *file_name, struct intr_frame *if_);
 static bool install_page(void *upage, void *kpage, bool writable);
 static bool load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable);
-static bool validate_segment(const struct phdr *phdr, struct file *file);
+static bool validate_segment(const struct PHDR *PHDR, struct file *file);
 static bool setup_stack(struct intr_frame *if_);
 static bool install_page(void *upage, void *kpage, bool writable);
 
@@ -191,6 +191,10 @@ tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED) {
 	if (child -> exit_status == -1)
 		return TID_ERROR;
 
+#ifdef DEBUG_WAIT
+	printf("[process_fork] pid %d : child %s\n", tid, child -> name);
+#endif
+
 	return tid;
 }
 
@@ -238,8 +242,12 @@ static void __do_fork(void *aux) {
 	struct intr_frame *parent_if;
 	bool succ = true;
 
+#ifdef DEBUG
+	printf("[Fork] Forking from %s to %s\n", parent->name, current->name);
+#endif
+
 	/* 1. Read the cpu context to local stack. */
-	memcpy (&if_, parent_if, sizeof(struct intr_frame));
+	memcpy(&if_, parent_if, sizeof(struct intr_frame));
 	if_.R.rax = 0;
 
 	/* 2. Duplicate PT */
@@ -263,6 +271,10 @@ static void __do_fork(void *aux) {
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
+
+#ifdef DEBUG
+	printf("[do_fork] %s Ready to switch!\n", current->name);
+#endif
 
 	sema_up(&curr -> fork_sema);
 
@@ -316,7 +328,6 @@ int process_exec(void *f_name) {
 		return -1;
 	}
 	
-	// argument_stack(arg_list, token_count, &_if);
 	void **rspp = &_if.rsp;
 
 	argument_stack(argv, argc, rspp);
@@ -383,16 +394,36 @@ int process_wait(tid_t child_tid UNUSED) {
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
 	struct thread *curr = thread_current();
+
+#ifdef DEBUG_WAIT
+	printf("\nparent children # : %d\n", list_size(&curr -> child_list));
+
+	printf("Head - ");
+	for (struct list_elem *e = list_begin(&curr -> child_list); e != list_end(&curr -> child_list); e = list_next(e)) {
+		printf("%llx - ", e);
+	}
+	printf("Tail\n");
+#endif
+
 	struct thread *child = get_child_process(child_tid);
 
 	if (child == NULL)
 		return -1;
-	
+
+#ifdef DEBUG_WAIT
+	printf("curr %s waits child %s - ", curr -> name, child -> name);
+#endif
+
 	sema_down(&child -> wait_sema);
 
 	int exit_status = child -> exit_status;
+
+#ifdef DEBUG_WAIT
+	printf("[process_wait] Child %d %s : exit status - %d\n", child_tid, child -> name, exit_status);
+#endif
 	
 	list_remove(&child -> child_elem);
+	sema_up(&child -> free_sema);
 
 	return exit_status;
 }
@@ -404,9 +435,18 @@ void process_exit(void) {
 	/* Destroy the current process's page directory
 	and switch back to the kernel-only page directory */
 
+	for (int i = 0; i < FDCOUNT_LIMIT; i++) {
+		close(i);
+	}
+
+	palloc_free_multiple(curr -> fd_table, FDT_PAGES);
+
+	file_close(curr -> running);
+
 	process_cleanup();
 
 	sema_up(&curr -> wait_sema);
+	sema_down(&curr -> free_sema);
 }
 
 	/* Destroy the current process's page directory
@@ -455,7 +495,7 @@ void process_activate(struct thread *next) {
  * Returns true if successful, false otherwise. */
 static bool load(const char *file_name, struct intr_frame *if_) {
 	struct thread *curr = thread_current();
-	struct ELF ehdr;
+	struct ELF EHDR;
 	struct file *file = NULL;
 	off_t file_ofs;
 	bool success = false;
@@ -467,7 +507,7 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 	if (curr -> pml4 == NULL)
 		goto done;
 	
-	process_activate(thread_current());
+	process_activate(curr);
 
 	/* Open executable file. */
 	file = filesys_open(file_name);
@@ -481,32 +521,32 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 	file_deny_write(file);
 
 	/* Read and verify executable header. */
-	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr
-			|| memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7)
-			|| ehdr.e_type != 2
-			|| ehdr.e_machine != 0x3E // amd64
-			|| ehdr.e_version != 1
-			|| ehdr.e_phentsize != sizeof(struct phdr)
-			|| ehdr.e_phnum > 1024) {
+	if (file_read(file, &EHDR, sizeof EHDR) != sizeof EHDR
+			|| memcmp(EHDR.e_ident, "\177ELF\2\1\1", 7)
+			|| EHDR.e_type != 2
+			|| EHDR.e_machine != 0x3E // amd64
+			|| EHDR.e_version != 1
+			|| EHDR.e_phentsize != sizeof(struct PHDR)
+			|| EHDR.e_phnum > 1024) {
 		printf("Load: %s: Error loading executable\n", file_name);
 		goto done;
 	}
 
 	/* Read program headers. */
-	file_ofs = ehdr.e_phoff;
+	file_ofs = EHDR.e_phoff;
 
-	for (i = 0; i < ehdr.e_phnum; i++) {
-		struct phdr phdr;
+	for (i = 0; i < EHDR.e_phnum; i++) {
+		struct PHDR PHDR;
 
 		if (file_ofs < 0 || file_ofs > file_length(file))
 			goto done;
 		file_seek(file, file_ofs);
 
-		if (file_read(file, &phdr, sizeof phdr) != sizeof phdr)
+		if (file_read(file, &PHDR, sizeof PHDR) != sizeof PHDR)
 			goto done;
-		file_ofs += sizeof phdr;
+		file_ofs += sizeof PHDR;
 		
-		switch (phdr.p_type) {
+		switch (PHDR.p_type) {
 			case PT_NULL:
 			case PT_NOTE:
 			case PT_PHDR:
@@ -519,25 +559,25 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 			case PT_SHLIB:
 				goto done;
 			case PT_LOAD:
-				if (validate_segment(&phdr, file)) {
-					bool writable = (phdr.p_flags & PF_W) != 0;
-					uint64_t file_page = phdr.p_offset & ~PGMASK;
-					uint64_t mem_page = phdr.p_vaddr & ~PGMASK;
-					uint64_t page_offset = phdr.p_vaddr & PGMASK;
+				if (validate_segment(&PHDR, file)) {
+					bool writable = (PHDR.p_flags & PF_W) != 0;
+					uint64_t file_page = PHDR.p_offset & ~PGMASK;
+					uint64_t mem_page = PHDR.p_vaddr & ~PGMASK;
+					uint64_t page_offset = PHDR.p_vaddr & PGMASK;
 					uint32_t read_bytes, zero_bytes;
 					
-					if (phdr.p_filesz > 0) {
+					if (PHDR.p_filesz > 0) {
 						/* Normal segment.
 						 * Read initial part from disk and zero the rest. */
-						read_bytes = page_offset + phdr.p_filesz;
-						zero_bytes = (ROUND_UP(page_offset + phdr.p_memsz, PGSIZE) - read_bytes);
+						read_bytes = page_offset + PHDR.p_filesz;
+						zero_bytes = (ROUND_UP(page_offset + PHDR.p_memsz, PGSIZE) - read_bytes);
 					} 
 					
 					else {
 						/* Entirely zero.
 						 * Don't read anything from disk. */
 						read_bytes = 0;
-						zero_bytes = ROUND_UP(page_offset + phdr.p_memsz, PGSIZE);
+						zero_bytes = ROUND_UP(page_offset + PHDR.p_memsz, PGSIZE);
 					}
 					
 					if (!load_segment(file, file_page, (void *)mem_page, read_bytes, zero_bytes, writable))
@@ -556,7 +596,7 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 		goto done;
 
 	/* Start address. */
-	if_ -> rip = ehdr.e_entry;
+	if_ -> rip = EHDR.e_entry;
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
@@ -565,40 +605,39 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close(file);
 	return success;
 }
 
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */
-static bool validate_segment(const struct phdr *phdr, struct file *file) {
+static bool validate_segment(const struct PHDR *PHDR, struct file *file) {
 	/* p_offset and p_vaddr must have the same page offset. */
-	if ((phdr -> p_offset & PGMASK) != (phdr -> p_vaddr & PGMASK))
+	if ((PHDR -> p_offset & PGMASK) != (PHDR -> p_vaddr & PGMASK))
 		return false;
 
 	/* p_offset must point within FILE. */
-	if (phdr -> p_offset > (uint64_t)file_length(file))
+	if (PHDR -> p_offset > (uint64_t)file_length(file))
 		return false;
 
 	/* p_memsz must be at least as big as p_filesz. */
-	if (phdr -> p_memsz < phdr -> p_filesz)
+	if (PHDR -> p_memsz < PHDR -> p_filesz)
 		return false;
 
 	/* The segment must not be empty. */
-	if (phdr -> p_memsz == 0)
+	if (PHDR -> p_memsz == 0)
 		return false;
 
 	/* The virtual memory region must both start and end within the
 	   user address space range. */
-	if (!is_user_vaddr((void *)phdr -> p_vaddr))
+	if (!is_user_vaddr((void *)PHDR -> p_vaddr))
 		return false;
 	
-	if (!is_user_vaddr((void *)(phdr -> p_vaddr + phdr -> p_memsz)))
+	if (!is_user_vaddr((void *)(PHDR -> p_vaddr + PHDR -> p_memsz)))
 		return false;
 
 	/* The region cannot "wrap around" across the kernel virtual
 	   address space. */
-	if (phdr -> p_vaddr + phdr -> p_memsz < phdr -> p_vaddr)
+	if (PHDR -> p_vaddr + PHDR -> p_memsz < PHDR -> p_vaddr)
 		return false;
 
 	/* Disallow mapping page 0.
@@ -606,7 +645,7 @@ static bool validate_segment(const struct phdr *phdr, struct file *file) {
 	   it then user code that passed a null pointer to system calls
 	   could quite likely panic the kernel by way of null pointer
 	   assertions in memcpy(), etc. */
-	if (phdr -> p_vaddr < PGSIZE)
+	if (PHDR -> p_vaddr < PGSIZE)
 		return false;
 
 	/* It's okay. */
@@ -711,6 +750,7 @@ static bool install_page(void *upage, void *kpage, bool writable) {
 	 * address, then map our page there. */
 	return (pml4_get_page(curr -> pml4, upage) == NULL && pml4_set_page(curr -> pml4, upage, kpage, writable));
 }
+
 #else
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the

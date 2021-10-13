@@ -78,7 +78,7 @@ static void kill(struct intr_frame *f) {
 			/* User's code segment, so it's a user exception, as we
 			   expected.  Kill the user process.  */
 			printf("%s: dying due to interrupt %#04llx (%s).\n",
-					thread_name (), f -> vec_no, intr_name (f -> vec_no));
+					thread_name(), f -> vec_no, intr_name(f -> vec_no));
 			intr_dump_frame(f);
 			thread_exit();
 
@@ -148,6 +148,6 @@ static void page_fault(struct intr_frame *f) {
 			not_present ? "not present" : "rights violation",
 			write ? "writing" : "reading",
 			user ? "user" : "kernel");
-	kill(f);
+	exit(-1);
 }
 
