@@ -15,7 +15,8 @@ struct file *file_open(struct inode *inode) {
 		file -> pos = 0;
 		file -> deny_write = false;
 
-		file -> dup_count = 0;
+		// file -> dup_count = 0;
+		file -> dupCount = 0;
 
 		return file;
 	}
@@ -43,7 +44,8 @@ struct file *file_duplicate(struct file *file) {
 		if (file -> deny_write)
 			file_deny_write(nfile);
 
-		nfile -> dup_count = file -> dup_count;
+		// nfile -> dup_count = file -> dup_count;
+		nfile -> dupCount = file -> dupCount;
 	}
 	return nfile;
 }

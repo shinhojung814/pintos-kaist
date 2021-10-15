@@ -1,8 +1,10 @@
-#include "devices/timer.h"
+#define DEBUG
+
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
+#include "devices/timer.h"
 #include "threads/interrupt.h"
 #include "threads/io.h"
 #include "threads/synch.h"
@@ -19,7 +21,8 @@
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
-static int64_t min_endtick = -1;
+static int64_t next_tick_to_awake = -1;
+
 const int F = 1 << 14;
 
 /* Number of loops per timer tick.
@@ -50,19 +53,21 @@ void timer_init(void) {
 void timer_calibrate(void) {
 	unsigned high_bit, test_bit;
 
-	ASSERT (intr_get_level() == INTR_ON);
-	printf ("Calibrating timer...");
+	ASSERT(intr_get_level() == INTR_ON);
+	printf("Calibrating timer...");
 
 	/* Approximate loops_per_tick as the largest power-of-two
 	   still less than one timer tick. */
 	loops_per_tick = 1u << 10;
+
 	while (!too_many_loops (loops_per_tick << 1)) {
 		loops_per_tick <<= 1;
-		ASSERT (loops_per_tick != 0);
+		ASSERT(loops_per_tick != 0);
 	}
 
 	/* Refine the next 8 bits of loops_per_tick. */
 	high_bit = loops_per_tick;
+
 	for (test_bit = high_bit >> 1; test_bit != high_bit >> 10; test_bit >>= 1)
 		if (!too_many_loops (high_bit | test_bit))
 			loops_per_tick |= test_bit;
@@ -91,13 +96,13 @@ void timer_sleep(int64_t ticks) {
 	int64_t start = timer_ticks();
 	struct thread *curr = thread_current();
 
-	ASSERT (intr_get_level() == INTR_ON);
+	ASSERT(intr_get_level() == INTR_ON);
 
 	if (timer_elapsed(start) < ticks) {
-		curr -> end_tick = start + ticks;
+		curr -> wakeup_tick = start + ticks;
 
-		if (min_endtick == -1 || curr -> end_tick < min_endtick)
-			min_endtick = curr -> end_tick;
+		if (next_tick_to_awake == -1 || curr -> wakeup_tick < next_tick_to_awake)
+			next_tick_to_awake = curr -> wakeup_tick;
 		
 		thread_sleep();
 	}
@@ -127,10 +132,10 @@ void timer_print_stats(void) {
 static void timer_interrupt(struct intr_frame *args UNUSED) {
 	ticks++;
 
-	while (min_endtick != -1 && min_endtick <= ticks) {
+	while (next_tick_to_awake != -1 && next_tick_to_awake <= ticks) {
 		enum intr_level old_level = intr_disable();
 
-		min_endtick = thread_wakeup();
+		next_tick_to_awake = thread_awake();
 
 		intr_set_level(old_level);
 	}
@@ -193,7 +198,8 @@ static void real_time_sleep(int64_t num, int32_t denom) {
 	   */
 	int64_t ticks = num * TIMER_FREQ / denom;
 
-	ASSERT (intr_get_level() == INTR_ON);
+	ASSERT(intr_get_level() == INTR_ON);
+
 	if (ticks > 0) {
 		/* We're waiting for at least one full timer tick.  Use
 		   timer_sleep() because it will yield the CPU to other
@@ -206,7 +212,7 @@ static void real_time_sleep(int64_t num, int32_t denom) {
 		/* Otherwise, use a busy-wait loop for more accurate
 		   sub-tick timing.  We scale the numerator and denominator
 		   down by 1000 to avoid the possibility of overflow. */
-		ASSERT (denom % 1000 == 0);
-		busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000));
+		ASSERT(denom % 1000 == 0);
+		busy_wait(loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000));
 	}
 }

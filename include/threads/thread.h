@@ -4,8 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "threads/synch.h"
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -98,12 +98,12 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 
-	int end_tick;
+	int wakeup_tick;
 
 	int init_priority;
 	int donated_priority;
-	struct lock *waiting_lock;
-	struct list donors;
+	struct lock *wait_on_lock;
+	struct list donations;
 	struct list_elem donation_elem;
 
 	int nice;
@@ -180,9 +180,9 @@ int thread_get_load_avg(void);
 void do_iret(struct intr_frame *tf);
 
 bool compare_thread_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
-bool compare_endtick_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool compare_awake_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 void thread_sleep(void);
-int64_t thread_wakeup(void);
+int64_t thread_awake(void);
 
 void nested_donation(struct thread *t, int new_priority);
 void multiple_donation(struct thread *curr);

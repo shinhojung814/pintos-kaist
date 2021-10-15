@@ -1,7 +1,6 @@
 #ifndef THREADS_SYNCH_H
 #define THREADS_SYNCH_H
 
-#include <debug.h>
 #include <list.h>
 #include <stdbool.h>
 
@@ -11,7 +10,7 @@ struct semaphore {
 	struct list waiters;        /* List of waiting threads. */
 };
 
-void sema_init (struct semaphore *sema, unsigned value);
+void sema_init(struct semaphore *sema, unsigned value);
 void sema_down(struct semaphore *sema);
 bool sema_try_down(struct semaphore *sema);
 void sema_up(struct semaphore *sema);
@@ -39,13 +38,16 @@ struct condition {
 void cond_init(struct condition *cond);
 void cond_wait(struct condition *cond, struct lock *lock);
 void cond_signal(struct condition *cond, struct lock *lock);
-void cond_broadcast (struct condition *cond, struct lock *lock);
+void cond_broadcast(struct condition *cond, struct lock *lock);
 
 /* Optimization barrier.
  *
  * The compiler will not reorder operations across an
  * optimization barrier.  See "Optimization Barriers" in the
  * reference guide for more information.*/
-#define barrier() asm volatile ("" : : : "memory")
+#define barrier() asm volatile("" \
+							   :  \
+							   :  \
+							   : "memory")
 
 #endif /* threads/synch.h */
