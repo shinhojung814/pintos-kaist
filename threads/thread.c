@@ -69,45 +69,6 @@ static void idle(void *aux UNUSED);
 void thread_init(void);
 void thread_start(void);
 
-// void thread_tick(void);
-// void thread_print_stats(void);
-
-// tid_t thread_create(const char *name, int priority, thread_func *function, void *aux);
-
-// void thread_block(void);
-// void thread_unblock(struct thread *t);
-
-// struct thread *thread_current(void);
-// tid_t thread_tid(void);
-// const char *thread_name(void);
-
-// void thread_exit(void) NO_RETURN;
-// void thread_yield(void);
-
-// int thread_get_priority(void);
-// void thread_set_priority(int);
-
-// int thread_get_nice(void);
-// void thread_set_nice(int);
-// int thread_get_recent_cpu(void);
-// int thread_get_load_avg(void);
-
-// void do_iret(struct intr_frame *tf);
-
-// bool compare_thread_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
-// bool compare_awake_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
-// void thread_sleep(void);
-// int64_t thread_wakeup(void);
-
-// void nested_donation(struct thread *t, int new_priority);
-// void multiple_donation(struct thread *curr);
-
-// void update_thread_recent_cpu(struct thread *t);
-// void update_total_recent_cpu(void);
-// void update_load_avg(void);
-// void update_thread_priority(struct thread *t);
-// void update_total_priority(void);
-
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t) -> magic == THREAD_MAGIC)
 
