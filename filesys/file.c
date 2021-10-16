@@ -15,8 +15,7 @@ struct file *file_open(struct inode *inode) {
 		file -> pos = 0;
 		file -> deny_write = false;
 
-		// file -> dup_count = 0;
-		file -> dupCount = 0;
+		file -> dup_count = 0;
 
 		return file;
 	}
@@ -44,8 +43,7 @@ struct file *file_duplicate(struct file *file) {
 		if (file -> deny_write)
 			file_deny_write(nfile);
 
-		// nfile -> dup_count = file -> dup_count;
-		nfile -> dupCount = file -> dupCount;
+		nfile -> dup_count = file -> dup_count;
 	}
 	return nfile;
 }
@@ -111,7 +109,7 @@ off_t file_write_at(struct file *file, const void *buffer, off_t size, off_t fil
 /* Prevents write operations on FILE's underlying inode
  * until file_allow_write() is called or FILE is closed. */
 void file_deny_write(struct file *file) {
-	ASSERT (file != NULL);
+	ASSERT(file != NULL);
 
 	if (!file -> deny_write) {
 		file -> deny_write = true;
@@ -123,7 +121,7 @@ void file_deny_write(struct file *file) {
  * (Writes might still be denied by some other file that has the
  * same inode open.) */
 void file_allow_write(struct file *file) {
-	ASSERT (file != NULL);
+	ASSERT(file != NULL);
 	if (file -> deny_write) {
 		file -> deny_write = false;
 		inode_allow_write(file -> inode);
@@ -132,21 +130,21 @@ void file_allow_write(struct file *file) {
 
 /* Returns the size of FILE in bytes. */
 off_t file_length(struct file *file) {
-	ASSERT (file != NULL);
+	ASSERT(file != NULL);
 	return inode_length(file -> inode);
 }
 
 /* Sets the current position in FILE to NEW_POS bytes from the
  * start of the file. */
 void file_seek(struct file *file, off_t new_pos) {
-	ASSERT (file != NULL);
-	ASSERT (new_pos >= 0);
+	ASSERT(file != NULL);
+	ASSERT(new_pos >= 0);
 	file -> pos = new_pos;
 }
 
 /* Returns the current position in FILE as a byte offset from the
  * start of the file. */
 off_t file_tell(struct file *file) {
-	ASSERT (file != NULL);
+	ASSERT(file != NULL);
 	return file -> pos;
 }
