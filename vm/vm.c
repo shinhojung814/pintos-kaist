@@ -20,7 +20,7 @@ void vm_init (void) {
 	vm_anon_init();
 	vm_file_init();
 #ifdef EFILESYS  /* For project 4 */
-	pagecache_init ();
+	pagecache_init();
 #endif
 	register_inspect_intr();
 	/* DO NOT MODIFY UPPER LINES. */
@@ -49,6 +49,9 @@ static struct frame *vm_get_victim(void);
 static struct frame *vm_evict_frame(void);
 static bool vm_do_claim_page(struct page *page);
 
+static uint64_t page_hash(const struct hash_elem *p_, void *aux UNUSED);
+static bool page_less(const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
+
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
@@ -72,8 +75,8 @@ err:
 }
 
 /* Find VA from spt and return page. On error, return NULL. */
-struct page *spt_find_page (struct supplemental_page_table *spt, void *va) {
-	struct page *page;
+struct page *spt_find_page(struct supplemental_page_table *spt, void *va) {
+	struct page page;
 
 	page.va = pg_round_down(va);
 
@@ -121,7 +124,7 @@ static struct frame *vm_evict_frame(void) {
 	bool swap_done = swap_out(page);
 
 	if (!swap_done)
-		PANIC("Swap is full!\n")
+		PANIC("Swap is full!\n");
 	
 	victim -> page = NULL;
 	memset(victim -> kva, 0, PGSIZE);
@@ -211,15 +214,23 @@ void supplemental_page_table_init(struct supplemental_page_table *spt) {
 }
 
 /* Copy supplemental page table from src to dst */
-bool supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
+bool supplemental_page_table_copy(struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
 }
 
 /* Free the resource hold by the supplemental page table */
-void supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
+void supplemental_page_table_kill(struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
 }
 
-page_hash 추가
-page_less 추가
+static uint64_t page_hash(const struct hash_elem *p_, void *aux UNUSED) {
+	const struct page *p = hash_entry(p_, struct page, hash_elem);
+	return hash_bytes(&p -> va, sizeof p -> va);
+}
+
+static bool page_less(const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED) {
+	const struct page *a = hash_entry(a_, struct page, hash_elem);
+	const struct page *b = hash_entry(b_, struct page, hash_elem);
+	return a -> va < b -> va;
+}

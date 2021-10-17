@@ -1,6 +1,7 @@
 #ifndef VM_VM_H
 #define VM_VM_H
 #include <stdbool.h>
+#include "lib/kernel/hash.h"
 #include "threads/palloc.h"
 
 enum vm_type {
@@ -24,9 +25,9 @@ enum vm_type {
 	VM_MARKER_END = (1 << 31),
 };
 
-#include "vm/uninit.h"
 #include "vm/anon.h"
 #include "vm/file.h"
+#include "vm/uninit.h"
 #ifdef EFILESYS
 #include "filesys/page_cache.h"
 #endif
@@ -46,6 +47,8 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 
 	/* Your implementation */
+	struct hash_elem hash_elem;
+	bool writable;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -63,6 +66,7 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem elem;
 };
 
 /* The function table for page operations.
@@ -85,6 +89,7 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	struct hash *page_table;
 };
 
 #include "threads/thread.h"
