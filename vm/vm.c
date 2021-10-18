@@ -16,7 +16,7 @@ static struct list_elem *clock_elem;
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
-void vm_init (void) {
+void vm_init(void) {
 	vm_anon_init();
 	vm_file_init();
 #ifdef EFILESYS  /* For project 4 */
@@ -62,7 +62,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 
 	struct supplemental_page_table *spt = &thread_current() -> spt;
 
-	/* Check wheter the upage is already occupied or not. */
+	/* Check whether the upage is already occupied or not. */
 	if (spt_find_page(spt, upage) == NULL) {
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
@@ -107,6 +107,15 @@ void spt_remove_page(struct supplemental_page_table *spt, struct page *page) {
 	
 	return true;
 }
+
+static void spt_destroy(struct hash_elem *e, void *aux UNUSED) {
+	struct page *page = hash_entry(e, struct page, hash_elem);
+	
+	ASSERT(page != NULL);
+	
+	destroy(page);
+	free(page);
+} 
 
 /* Get the struct frame, that will be evicted. */
 static struct frame *vm_get_victim(void) {
@@ -200,7 +209,14 @@ static bool vm_do_claim_page(struct page *page) {
 	frame -> page = page;
 	page -> frame = frame;
 
+	if (clock_elem != NULL)
+		list_insert(clock_elem, &frame -> elem);
+	else
+		list_push_back(&frame_list, &frame -> elem);
+
 	/* Insert page table entry to map page's VA to frame's PA. */
+	if (!pml4_set_page(curr -> pml4, page -> va, frame -> kva, page -> writable))
+		return false;
 
 	return swap_in(page, frame -> kva);
 }
