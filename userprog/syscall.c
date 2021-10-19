@@ -1,3 +1,6 @@
+#include <list.h>
+#include <stdio.h>
+#include <syscall-nr.h>
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "threads/flags.h"
@@ -9,9 +12,6 @@
 #include "userprog/gdt.h"
 #include "userprog/process.h"
 #include "userprog/syscall.h"
-#include <list.h>
-#include <stdio.h>
-#include <syscall-nr.h>
 #include "intrinsic.h"
 
 const int STDIN = 1;
@@ -22,7 +22,7 @@ void syscall_handler(struct intr_frame *);
 
 static struct file *find_file_by_fd(int fd);
 
-void check_address(uaddr);
+void check_address(const uint64_t *uaddr);
 void halt(void);
 void exit(int status);
 bool create(const char *file, unsigned initial_size);
@@ -132,9 +132,19 @@ void syscall_handler(struct intr_frame *f) {
 
 void check_address(const uint64_t *uaddr) {
 	struct thread *curr = thread_current();
-	if (uaddr == NULL || !(is_user_vaddr(uaddr)) || pml4_get_page(curr -> pml4, uaddr) == NULL) {
+
+	if (uaddr == NULL || !(is_user_vaddr(uaddr)) || pml4_get_page(curr -> pml4, uaddr) == NULL)
 		exit(-1);
-	}
+
+	uint64_t *pte = pml4e_walk(curr -> pml4, (const uint64_t)uaddr, 0);
+
+	if (pte == NULL)
+		exit(-1);
+	
+	struct page *page = spt_find_page(&curr -> spt, uaddr);
+	
+	if (page == NULL)
+		exit(-1);
 }
 
 static struct file *find_file_by_fd(int fd) {

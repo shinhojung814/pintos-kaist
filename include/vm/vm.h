@@ -18,6 +18,7 @@ enum vm_type {
 
 	/* Auxillary bit flag marker for store information. You can add more
 	 * markers, until the value is fit in the int. */
+	VM_STACK = (1 << 3),
 	VM_MARKER_0 = (1 << 3),
 	VM_MARKER_1 = (1 << 4),
 
@@ -80,10 +81,16 @@ struct page_operations {
 	enum vm_type type;
 };
 
+struct load_info {
+	struct file *file;
+	off_t ofs;
+	size_t page_read_bytes;
+	size_t page_zero_bytes;
+};
+
 #define swap_in(page, v) (page) -> operations -> swap_in((page), v)
 #define swap_out(page) (page) -> operations -> swap_out(page)
-#define destroy(page) \
-	if ((page) -> operations -> destroy)(page) -> operations -> destroy(page)
+#define destroy(page) if ((page) -> operations -> destroy) (page) -> operations -> destroy(page)
 
 /* Representation of current process's memory space.
  * We don't want to force you to obey any specific design for this struct.
@@ -101,7 +108,7 @@ struct page *spt_find_page(struct supplemental_page_table *spt, void *va);
 bool spt_insert_page(struct supplemental_page_table *spt, struct page *page);
 void spt_remove_page(struct supplemental_page_table *spt, struct page *page);
 
-void vm_init (void);
+void vm_init(void);
 bool vm_try_handle_fault(struct intr_frame *f, void *addr, bool user,
 		bool write, bool not_present);
 

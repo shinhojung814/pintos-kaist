@@ -2,6 +2,13 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include "threads/malloc.h"
+#include "threads/mmu.h"
+#include "threads/palloc.h"
+#include "threads/vaddr.h"
+
+#define CEILING(x, y) (((x) + (y) - 1) / (y))
+#define SECTORS_PER_PAGE CEILING(PGSIZE, DISK_SECTOR_SIZE)
 
 /* DO NOT MODIFY BELOW LINE */
 static struct disk *swap_disk;

@@ -42,6 +42,8 @@
 #define PF_W 2 /* Writable. */
 #define PF_R 4 /* Readable. */
 
+#define WORD_ALIGN(addr) ((uint64_t)addr - ((uint64_t)addr / 8) * 8)
+
 /* Executable header.  See [ELF1] 1-4 to 1-8.
  * This appears at the very beginning of an ELF binary. */
 struct ELF64_hdr {
@@ -89,8 +91,7 @@ static void __do_fork(void *);
 static bool setup_stack(struct intr_frame *if_);
 static bool validate_segment(const struct PHDR *, struct file *);
 static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
-						 uint32_t read_bytes, uint32_t zero_bytes,
-						 bool writable);
+			uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 
 struct thread *get_child_process(int pid) {
 	struct thread *curr = thread_current();
@@ -496,13 +497,8 @@ int process_wait(tid_t child_tid UNUSED) {
 	return exit_status;
 }
 
-/* Exit the process. This function is called by thread_exit (). */
+/* Exit the process. This function is called by thread_exit(). */
 void process_exit(void) {
-	/* TODO: Your code goes here.
-	 * TODO: Implement process termination message (see
-	 * TODO: project2/process_termination.html).
-	 * TODO: We recommend you to implement process resource cleanup here. */
-
 	struct thread *curr = thread_current();
 
 	for (int i = 0; i < FDCOUNT_LIMIT; i++) {
@@ -738,7 +734,7 @@ static bool install_page(void *upage, void *kpage, bool writable);
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
 static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
-			 uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+			uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
@@ -754,6 +750,7 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 
 		/* Get a page of memory. */
 		uint8_t *kpage = palloc_get_page(PAL_USER);
+
 		if (kpage == NULL)
 			return false;
 
@@ -791,8 +788,36 @@ static bool setup_stack(struct intr_frame *if_) {
 	if (kpage != NULL) {
 		success = install_page(((uint8_t *)USER_STACK) - PGSIZE, kpage, true);
 
-		if (success)
-			if_ -> rsp = USER_STACK;
+		if (success) {
+			char **argv = (char **)if_ -> rsp;
+			uint64_t argc = if_ -> R.rdi;
+			uint64_t stack_pos = USER_STACK;
+			uint64_t args_pos[32];
+
+			for (int i = 0; i < (int)argc; i++) {
+				size_t tmplen = strlen(argv[i]);
+				stack_pos = stack_pos - tmplen - 1;
+				strlcpy((char *)stack_pos, argv[i], 128);
+				args_pos[i] = stack_pos;
+			}
+
+			stack_pos -= WORD_ALIGN(stack_pos);
+
+			for (int i = argc; i >= 0; i--) {
+				stack_pos -= 8;
+
+				if (i == (int)argc) * (char *)(stack_pos) = 0;
+
+				else
+					memcpy((void *)stack_pos, &(args_pos[i]), 8);
+			}
+
+			stack_pos -= 8;
+			*(uint64_t *)stack_pos) = 0;
+			if_ -> rsp = stack_pos;
+			if_ -> R.rsi = stack_pos + 8;
+			if_ -> R.rdi = argc;
+		}
 		
 		else
 			palloc_free_page(kpage);
@@ -824,13 +849,35 @@ static bool install_page(void *upage, void *kpage, bool writable) {
  * upper block. */
 
 static bool lazy_load_segment(struct page *page, void *aux) {
-	/* TODO: Load the segment from the file */
-	/* TODO: This called when the first page fault occurs on address VA. */
-	/* TODO: VA is available when calling this function. */
+	/* Load the segment from the file */
+	/* This called when the first page fault occurs on address VA. */
+	/* VA is available when calling this function. */
+	struct load_info *li = (struct load_info *)aux;
+
+	if (page == NULL)
+		return false;
+	
+	ASSERT(li -> page_read_bytes <= PGSIZE);
+	ASSERT(li -> page_zero_bytes <= PGSIZE);
+
+	if (li -> page_read_bytes > 0) {
+		file_seek(li -> file, li -> ofs);
+
+		if (file_read(li -> file, page -> va, li -> page_read_bytes) != (off_t)li -> page_read_bytes) {
+			vm_dealloc_page(page);
+			free(li);
+			return false;
+		}
+	}
+
+	memset(page -> va + li -> page_read_bytes, 0, li -> page_zero_bytes);
+	file_close(li -> file);
+	free(li);
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
- * UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
+ * UPAGE. In total, READ_BYTES + ZERO_BYTES bytes of virtual
  * memory are initialized, as follows:
  *
  * - READ_BYTES bytes at UPAGE must be read from FILE
@@ -849,6 +896,8 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
 
+	off_t read_ofs = ofs;
+
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
@@ -856,17 +905,24 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		/* Set up aux to pass information to the lazy_load_segment. */
+		struct load_info *aux = malloc(sizeof(struct load_info));
+
+		aux -> file = file_reopen(file);
+		aux -> ofs = read_ofs;
+		aux -> page_read_bytes = page_read_bytes;
+		aux -> page_zero_bytes = page_zero_bytes;
 		
-		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-											writable, lazy_load_segment, aux))
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, aux)) {
+			free(aux);
 			return false;
+		}
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		read_ofs += PGSIZE;
 	}
 
 	return true;
@@ -877,11 +933,46 @@ static bool setup_stack(struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE);
 
-	/* TODO: Map the stack on stack_bottom and claim the page immediately.
-	 * TODO: If success, set the rsp accordingly.
-	 * TODO: You should mark the page is stack. */
-	/* TODO: Your code goes here */
+	/* Map the stack on stack_bottom and claim the page immediately.
+	 * If success, set the rsp accordingly.
+	 * You should mark the page is stack. */
+	if (!vm_alloc_page(VM_ANON | VM_STACK, stack_bottom, true))
+		return false;
+	
+	if (!vm_claim_page(stack_bottom))
+		return false;
+	
+	memset(stack_bottom, 0, PGSIZE);
 
+	char **argv = (char **)if_ -> R.rsi;
+	uint64_t argc = if_ -> R.rdi;
+	uint64_t stack_pos = USER_STACK;
+	uint64_t args_pos[32];
+
+	for (int i = 0; i < (int)argc; i++) {
+		size_t tmplen = strlen(argv[i]);
+		stack_pos = stack_pos - tmplen - 1;
+		strlcpy((char *)stack_pos, argv[i], 128);
+		args_pos[i] = stack_pos;
+	}
+
+	stack_pos -= WORD_ALIGN(stack_pos);
+
+	for (int i = argc; i >= 0; i--) {
+		stack_pos -= 8;
+
+		if (i == (int)argc)
+			*(char *)(stack_pos) = 0;
+
+		else
+			memcpy((void *)stack_pos, &(args_pos[i]), 8);
+	}
+
+	stack_pos -= 8;
+	*((uint64_t *)stack_pos) = 0;
+	if_ -> rsp = stack_pos;
+	if_ -> R.rsi = stack_pos + 8;
+	if_ -> R.rdi = argc;
 	return success;
 }
 #endif /* VM */
