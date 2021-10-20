@@ -23,6 +23,7 @@ void syscall_handler(struct intr_frame *);
 static struct file *find_file_by_fd(int fd);
 
 void check_address(const uint64_t *uaddr);
+static void check_writable_address(void *ptr);
 void halt(void);
 void exit(int status);
 bool create(const char *file, unsigned initial_size);
@@ -147,6 +148,13 @@ void check_address(const uint64_t *uaddr) {
 		exit(-1);
 }
 
+static void check_writable_address(void *ptr) {
+	struct page *page = spt_find_page(&thread_current() -> spt, ptr);
+
+	if (page == NULL || !page -> writable)
+		exit(-1);
+}
+
 static struct file *find_file_by_fd(int fd) {
 	struct thread *curr = thread_current();
 
@@ -263,6 +271,8 @@ int read(int fd, void *buffer, unsigned size) {
 	}
 
 	else {
+		check_address(buffer);
+		check_writable_address(buffer);
 		lock_acquire(&file_lock);
 		ret = file_read(file_object, buffer, size);
 		lock_release(&file_lock);

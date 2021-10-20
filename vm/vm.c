@@ -34,13 +34,13 @@ void vm_init(void) {
  * type of the page after it will be initialized.
  * This function is fully implemented now. */
 enum vm_type page_get_type(struct page *page) {
-	int ty = VM_TYPE(page -> operations -> type);
+	int type = VM_TYPE(page -> operations -> type);
 
-	switch (ty) {
+	switch (type) {
 		case VM_UNINIT:
 			return VM_TYPE(page -> uninit.type);
 		default:
-			return ty;
+			return type;
 	}
 }
 
@@ -67,7 +67,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 		/* Create the page, fetch the initialier according to the VM type,
 		 * and then create "uninit" page struct by calling uninit_new. You
 		 * should modify the field after calling the uninit_new. */
-		ASSERT(VM_TYPE(type) != VM_UNINIT)
+		ASSERT(type != VM_UNINIT);
 
 		/* Insert the page into the spt. */
 		struct page *page = malloc(sizeof(struct page));
@@ -82,6 +82,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage, bool writabl
 
 		page -> writable = writable_aux;
 		spt_insert_page(spt, page);
+
 		return true;
 	}
 
@@ -230,20 +231,20 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr,
 	if (is_kernel_vaddr(addr) && user)
 		return false;
 	
-	// void *stack_bottom = pg_round_down(curr -> saved_sp);
+	void *stack_bottom = pg_round_down(curr -> saved_rsp);
 
-	// if (write && (stack_bottom - PGSIZE <= addr && (uintptr_t)addr < USER_STACK)) {
-	// 	vm_stack_growth(addr);
-	// 	return true;
-	// }
+	if (write && (stack_bottom - PGSIZE <= addr && (uintptr_t)addr < USER_STACK)) {
+		vm_stack_growth(addr);
+		return true;
+	}
 
 	struct page *page = spt_find_page(spt, addr);
 
 	if (page == NULL)
 		return false;
 	
-	// if (write && !not_present)
-	// 	return vm_handle_wp(page);
+	if (write && !not_present)
+		return vm_handle_wp(page);
 
 	return vm_do_claim_page(page);
 }

@@ -57,8 +57,8 @@ void exception_init(void) {
 }
 
 /* Prints exception statistics. */
-void exception_print_stats (void) {
-	printf ("Exception: %lld page faults\n", page_fault_cnt);
+void exception_print_stats(void) {
+	printf("Exception: %lld page faults\n", page_fault_cnt);
 }
 
 /* Handler for an exception (probably) caused by a user process. */
@@ -111,6 +111,7 @@ static void kill(struct intr_frame *f) {
    description of "Interrupt 14--Page Fault Exception (#PF)" in
    [IA32-v3a] section 5.15 "Exception and Interrupt Reference". */
 static void page_fault(struct intr_frame *f) {
+	struct thread *curr = thread_current();
 	bool not_present;  /* True: not-present page, false: writing r/o page. */
 	bool write;        /* True: access was write, false: access was read. */
 	bool user;         /* True: access by user, false: access by kernel. */
@@ -132,23 +133,30 @@ static void page_fault(struct intr_frame *f) {
 	write = (f -> error_code & PF_W) != 0;
 	user = (f -> error_code & PF_U) != 0;
 
-// 	exit(-1);
+	if (user)
+		curr -> saved_rsp = f -> rsp;
 
-// #ifdef VM
-// 	/* For project 3 and later. */
-// 	if (vm_try_handle_fault(f, fault_addr, user, write, not_present))
-// 		return;
-// #endif
+#ifdef VM
+	/* For project 3 and later. */
+	if (vm_try_handle_fault(f, fault_addr, user, write, not_present))
+		return;
+#endif
 
-// 	/* Count page faults. */
-// 	page_fault_cnt++;
+	if (user) {
+		curr -> exit_status = -1;
+		f -> cs = SEL_UCSEG;
+	}
 
-// 	/* If the fault is true fault, show info and exit. */
-// 	printf("Page fault at %p: %s error %s page in %s context.\n",
-// 			fault_addr,
-// 			not_present ? "not present" : "rights violation",
-// 			write ? "writing" : "reading",
-// 			user ? "user" : "kernel");
-// 	kill(f);
+	/* Count page faults. */
+	page_fault_cnt++;
+
+	// /* If the fault is true fault, show info and exit. */
+	// printf("Page fault at %p: %s error %s page in %s context.\n",
+	// 		fault_addr,
+	// 		not_present ? "not present" : "rights violation",
+	// 		write ? "writing" : "reading",
+	// 		user ? "user" : "kernel");
+	
+	kill(f);
 }
 

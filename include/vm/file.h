@@ -8,8 +8,14 @@ enum vm_type;
 
 struct file_page {
     struct file *file;
-    off_t size;
     off_t ofs;
+    off_t size;
+};
+
+struct mmap_info {
+    struct file *file;
+    off_t offset;
+    size_t read_bytes;
 };
 
 void vm_file_init(void);

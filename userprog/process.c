@@ -208,7 +208,7 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
 #endif
 
 	/* 2. Resolve VA from the parent's page map level 4. */
-	parent_page = pml4_get_page(parent->pml4, va);
+	parent_page = pml4_get_page(parent -> pml4, va);
 
 	if (parent_page == NULL) {
 		printf("[fork-duplicate] failed to fetch page for user vaddr 'va'\n");
@@ -223,8 +223,7 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
 	uint64_t va_offset = pg_ofs(va);
 #endif
 
-	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
-	 *    TODO: NEWPAGE. */
+	/* 3. Allocate new PAL_USER page for the child and set result to NEWPAGE. */
 	new_page = palloc_get_page(PAL_USER);
 	
 	if (new_page == NULL) {
@@ -232,27 +231,29 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
 		return false;
 	}
 
-	/* 4. TODO: Duplicate parent's page to the new page and
-	 *    TODO: check whether parent's page is writable or not (set WRITABLE
-	 *    TODO: according to the result). */
+	/* 4. Duplicate parent's page to the new page and
+	 *    check whether parent's page is writable or not (set WRITABLE
+	 *    according to the result). */
 	memcpy(new_page, parent_page, PGSIZE);
-
 	writable = is_writable(pte);
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page(current -> pml4, va, new_page, writable)) {
-		/* 6. TODO: if fail to insert page, do error handling. */
+		/* 6. If fail to insert page, do error handling. */
 		printf("Failed to map user virtual page to given physical frame\n");
+		palloc_free_page(new_page);
+
+		curr -> exit_status = -1;
 		return false;
 	}
 
-#ifdef DEBUG
-	if (pml4_get_page(current -> pml4, va) != new_page)
-		printf("Not mapped!");
+// #ifdef DEBUG
+// 	if (pml4_get_page(current -> pml4, va) != new_page)
+// 		printf("Not mapped!");
 
-	printf("--Completed copy--\n");
-#endif
+// 	printf("--Completed copy--\n");
+// #endif
 
 	return true;
 }
