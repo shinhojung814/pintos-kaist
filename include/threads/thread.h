@@ -125,7 +125,6 @@ struct thread {
 
 	int fd_idx;
 	struct file **fd_table;
-
 	struct file *running;
 
 	int stdin_count;
@@ -140,14 +139,28 @@ struct thread {
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
 
-	/* Saved stack pointer initial transition from user to kernel mode */
-	uintptr_t saved_rsp;
+	/* Saved stack pointer on the initial transition from user to kernel mode */
+	void *rsp_stack;
+	void *stack_bottom;
 #endif
 
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
 };
+
+struct thread_file {
+	struct file* file;
+	struct dir* dir;
+	int fd;
+	struct list_elem elem;
+	//for dup2, default -1
+	int dup_tag;
+	int dup_cnt;
+	//for stdin and stdout
+	int std;
+};
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

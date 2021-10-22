@@ -77,8 +77,7 @@ static void kill(struct intr_frame *f) {
 		case SEL_UCSEG:
 			/* User's code segment, so it's a user exception, as we
 			   expected.  Kill the user process.  */
-			printf("%s: dying due to interrupt %#04llx (%s).\n",
-					thread_name(), f -> vec_no, intr_name(f -> vec_no));
+			printf("%s: dying due to interrupt %#04llx (%s).\n", thread_name(), f -> vec_no, intr_name(f -> vec_no));
 			intr_dump_frame(f);
 			thread_exit();
 
@@ -88,13 +87,12 @@ static void kill(struct intr_frame *f) {
 			   may cause kernel exceptions--but they shouldn't arrive
 			   here.)  Panic the kernel to make the point.  */
 			intr_dump_frame(f);
-			PANIC ("Kernel bug - unexpected interrupt in kernel");
+			PANIC("Kernel bug - unexpected interrupt in kernel");
 
 		default:
 			/* Some other code segment?  Shouldn't happen.  Panic the
 			   kernel. */
-			printf("Interrupt %#04llx(%s) in unknown segment %04x\n",
-					f->vec_no, intr_name(f -> vec_no), f -> cs);
+			printf("Interrupt %#04llx(%s) in unknown segment %04x\n", f -> vec_no, intr_name(f -> vec_no), f -> cs);
 			thread_exit();
 	}
 }
@@ -121,7 +119,6 @@ static void page_fault(struct intr_frame *f) {
 	   accessed to cause the fault.  It may point to code or to
 	   data.  It is not necessarily the address of the instruction
 	   that caused the fault (that's f->rip). */
-
 	fault_addr = (void *)rcr2();
 
 	/* Turn interrupts back on (they were only off so that we could
@@ -133,30 +130,22 @@ static void page_fault(struct intr_frame *f) {
 	write = (f -> error_code & PF_W) != 0;
 	user = (f -> error_code & PF_U) != 0;
 
-	if (user)
-		curr -> saved_rsp = f -> rsp;
-
 #ifdef VM
 	/* For project 3 and later. */
 	if (vm_try_handle_fault(f, fault_addr, user, write, not_present))
 		return;
 #endif
-
-	if (user) {
-		curr -> exit_status = -1;
-		f -> cs = SEL_UCSEG;
-	}
+	exit(-1);
 
 	/* Count page faults. */
 	page_fault_cnt++;
 
-	// /* If the fault is true fault, show info and exit. */
-	// printf("Page fault at %p: %s error %s page in %s context.\n",
-	// 		fault_addr,
-	// 		not_present ? "not present" : "rights violation",
-	// 		write ? "writing" : "reading",
-	// 		user ? "user" : "kernel");
+	/* If the fault is true fault, show info and exit. */
+	printf("Page fault at %p: %s error %s page in %s context.\n",
+			fault_addr,
+			not_present ? "not present" : "rights violation",
+			write ? "writing" : "reading",
+			user ? "user" : "kernel");
 	
 	kill(f);
 }
-

@@ -22,8 +22,8 @@ void syscall_handler(struct intr_frame *);
 
 static struct file *find_file_by_fd(int fd);
 
-void check_address(const uint64_t *uaddr);
-static void check_writable_address(void *ptr);
+struct page *check_address(void *addr);
+void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write);
 void halt(void);
 void exit(int status);
 bool create(const char *file, unsigned initial_size);
@@ -64,95 +64,109 @@ void syscall_init(void) {
 
 void syscall_handler(struct intr_frame *f) {
 	switch (f -> R.rax) {
+		case SYS_HALT:
+			halt();
+			break;
 
-	case SYS_HALT:
-		halt();
-		break;
+		case SYS_EXIT:
+			exit(f -> R.rdi);
+			break;
 
-	case SYS_EXIT:
-		exit(f -> R.rdi);
-		break;
+		case SYS_FORK:
+			f -> R.rax = fork(f -> R.rdi, f);
+			break;
 
-	case SYS_FORK:
-		f -> R.rax = fork(f -> R.rdi, f);
-		break;
-
-	case SYS_EXEC:
-		if (exec(f -> R.rdi) == -1)
+		case SYS_EXEC:
+			if (exec(f -> R.rdi) == -1)
+				exit(-1);
+			break;
+		
+		case SYS_WAIT:
+			f -> R.rax = process_wait(f -> R.rdi);
+			break;
+		
+		case SYS_CREATE:
+			f -> R.rax = create(f -> R.rdi, f -> R.rsi);
+			break;
+		
+		case SYS_REMOVE:
+			f -> R.rax = remove(f -> R.rdi);
+			break;
+		
+		case SYS_OPEN:
+			f -> R.rax = open(f -> R.rdi);
+			break;
+		
+		case SYS_FILESIZE:
+			f -> R.rax = filesize(f -> R.rdi);
+			break;
+		case SYS_READ:
+			f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
+			break;
+		
+		case SYS_WRITE:
+			f -> R.rax = write(f -> R.rdi, f -> R.rsi, f -> R.rdx);
+			break;
+		
+		case SYS_SEEK:
+			seek(f -> R.rdi, f -> R.rsi);
+			break;
+		
+		case SYS_TELL:
+			f -> R.rax = tell(f -> R.rdi);
+			break;
+		
+		case SYS_CLOSE:
+			close(f -> R.rdi);
+			break;
+		
+		case SYS_DUP2:
+			f -> R.rax = dup2(f -> R.rdi, f -> R.rsi);
+			break;
+		
+		default:
 			exit(-1);
-		break;
-	
-	case SYS_WAIT:
-		f -> R.rax = process_wait(f -> R.rdi);
-		break;
-	
-	case SYS_CREATE:
-		f -> R.rax = create(f -> R.rdi, f -> R.rsi);
-		break;
-	
-	case SYS_REMOVE:
-		f -> R.rax = remove(f -> R.rdi);
-		break;
-	
-	case SYS_OPEN:
-		f -> R.rax = open(f -> R.rdi);
-		break;
-	
-	case SYS_FILESIZE:
-		f -> R.rax = filesize(f -> R.rdi);
-		break;
-	case SYS_READ:
-		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
-		break;
-	
-	case SYS_WRITE:
-		f -> R.rax = write(f -> R.rdi, f -> R.rsi, f -> R.rdx);
-		break;
-	
-	case SYS_SEEK:
-		seek(f -> R.rdi, f -> R.rsi);
-		break;
-	
-	case SYS_TELL:
-		f -> R.rax = tell(f -> R.rdi);
-		break;
-	
-	case SYS_CLOSE:
-		close(f -> R.rdi);
-		break;
-	
-	case SYS_DUP2:
-		f -> R.rax = dup2(f -> R.rdi, f -> R.rsi);
-		break;
-	
-	default:
-		exit(-1);
-		break;
+			break;
 	}
 }
 
-void check_address(const uint64_t *uaddr) {
-	struct thread *curr = thread_current();
+struct page *check_address(void *addr) {
+	// struct thread *curr = thread_current();
 
-	if (uaddr == NULL || !(is_user_vaddr(uaddr)) || pml4_get_page(curr -> pml4, uaddr) == NULL)
-		exit(-1);
+	// if (uaddr == NULL || !(is_user_vaddr(uaddr)) || pml4_get_page(curr -> pml4, uaddr) == NULL)
+	// 	exit(-1);
 
-	uint64_t *pte = pml4e_walk(curr -> pml4, (const uint64_t)uaddr, 0);
+	// uint64_t *pte = pml4e_walk(curr -> pml4, (const uint64_t)uaddr, 0);
 
-	if (pte == NULL)
+	// if (pte == NULL)
+	// 	exit(-1);
+	
+	// struct page *page = spt_find_page(&curr -> spt, uaddr);
+	
+	// if (page == NULL)
+	// 	exit(-1);
+
+	if (is_kernel_vaddr(addr))
 		exit(-1);
 	
-	struct page *page = spt_find_page(&curr -> spt, uaddr);
-	
-	if (page == NULL)
-		exit(-1);
+	return spt_find_page(&thread_current() -> spt, addr);
 }
 
-static void check_writable_address(void *ptr) {
-	struct page *page = spt_find_page(&thread_current() -> spt, ptr);
+void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write) {
+	// struct page *page = spt_find_page(&thread_current() -> spt, ptr);
 
-	if (page == NULL || !page -> writable)
-		exit(-1);
+	// if (page == NULL || !page -> writable)
+	// 	exit(-1);
+
+	for (int i = 0; i < size; i++) {
+		struct page *page = check_address(buffer + i);
+
+		if (page == NULL)
+			exit(-1);
+		
+		if (to_write == true && page -> writable == false)
+			exit(-1);
+	}
 }
 
 static struct file *find_file_by_fd(int fd) {
@@ -238,9 +252,9 @@ int filesize(int fd) {
 int read(int fd, void *buffer, unsigned size) {
 	check_address(buffer);
 
-	int ret;
 	struct thread *curr = thread_current();
 	struct file *file_object = find_file_by_fd(fd);
+	int ret;
 
 	if (file_object == NULL)
 		return -1;
@@ -272,8 +286,8 @@ int read(int fd, void *buffer, unsigned size) {
 
 	else {
 		check_address(buffer);
-		check_writable_address(buffer);
 		lock_acquire(&file_lock);
+
 		ret = file_read(file_object, buffer, size);
 		lock_release(&file_lock);
 	}
@@ -284,16 +298,16 @@ int read(int fd, void *buffer, unsigned size) {
 int write(int fd, const void *buffer, unsigned size) {
 	check_address(buffer);
 
-	int ret;
 	struct file *file_object = find_file_by_fd(fd);
+	int ret;
 
 	if (file_object == NULL)
 		return -1;
 
-	struct thread *cur = thread_current();
+	struct thread *curr = thread_current();
 
 	if (file_object == STDOUT) {
-		if (cur -> stdout_count == 0) {
+		if (curr -> stdout_count == 0) {
 			NOT_REACHED();
 			remove_file_from_fdt(fd);
 			ret = -1;
