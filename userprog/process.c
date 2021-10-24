@@ -88,7 +88,10 @@ static bool load(const char *file_name, struct intr_frame *if_);
 static void initd(void *f_name);
 static void __do_fork(void *);
 
+bool install_page(void *upage, void *kpage, bool writable);
 static bool validate_segment(const struct PHDR *phdr, struct file *file);
+static bool load_segment(struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable);
+bool setup_stack(struct intr_frame *if_);
 
 /* General process initializer for initd and other process. */
 static void process_init(void) {
@@ -214,8 +217,6 @@ static bool duplicate_pte(uint64_t *pte, void *va, void *aux) {
 	if (!pml4_set_page(curr -> pml4, va, new_page, writable)) {
 		/* 6. If fail to insert page, do error handling. */
 		printf("Failed to map user virtual page to given physical frame\n");
-		palloc_free_page(new_page);
-		curr -> exit_status = -1;
 		return false;
 	}
 
@@ -236,10 +237,6 @@ static void __do_fork(void *aux) {
 	bool succ = true;
 
 	parent_if = &parent -> parent_if;
-
-#ifdef DEBUG
-	printf("[Fork] Forking from %s to %s\n", parent -> name, curr -> name);
-#endif
 
 	/* 1. Read the cpu context to local stack. */
 	memcpy(&if_, parent_if, sizeof(struct intr_frame));
@@ -311,8 +308,6 @@ static void __do_fork(void *aux) {
 #endif
 	sema_up(&curr -> fork_sema);
 
-	process_init();
-
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret(&if_);
@@ -328,7 +323,6 @@ error:
 int process_exec(void *f_name) {
 	char *file_name = f_name;
 	bool success;
-	struct thread *curr = thread_current();
 
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
@@ -342,12 +336,8 @@ int process_exec(void *f_name) {
 	/* We first kill the current context */
 	process_cleanup();
 
-#ifdef VM
-	supplemental_page_table_init(&thread_current() -> spt);
-#endif
-
-	int argc = 0;
 	char *argv[30];
+	int argc = 0;
 
 	char *token, *save_ptr;
 	token = strtok_r(file_name, " ", &save_ptr);
@@ -369,6 +359,7 @@ int process_exec(void *f_name) {
 
 	void **rspp = &_if.rsp;
 	argument_stack(argv, argc, rspp);
+
 	_if.R.rdi = argc;
 	_if.R.rsi = (uint64_t)*rspp + sizeof(void *);
 
@@ -428,36 +419,18 @@ int process_wait(tid_t child_tid UNUSED) {
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
 	struct thread *curr = thread_current();
-
-#ifdef DEBUG_WAIT
-	printf("\nparent children # : %d\n", list_size(&curr -> child_list));
-
-	printf("Head - ");
-
-	for (struct list_elem *e = list_begin(&curr -> child_list); e != list_end(&curr -> child_list); e = list_next(e)) {
-		printf("%llx - ", e);
-	}
-
-	printf("Tail\n");
-#endif
-
 	struct thread *child = get_child_process(child_tid);
 
 	if (child == NULL)
 		return -1;
-
-#ifdef DEBUG_WAIT
-	printf("cur %s waits child %s - ", curr -> name, child -> name);
-#endif
+	
 	sema_down(&child -> wait_sema);
 
 	int exit_status = child -> exit_status;
 
-#ifdef DEBUG_WAIT
-	printf("[process_wait] Child %d %s : exit status - %d\n", child_tid, child -> name, exit_status);
-#endif
 	list_remove(&child -> child_elem);
 	sema_up(&child -> free_sema);
+
 	return exit_status;
 }
 
@@ -472,11 +445,6 @@ void process_exit(void) {
 	palloc_free_multiple(curr -> fd_table, FDT_PAGES);
 	file_close(curr -> running);
 	process_cleanup();
-
-	if (curr -> pml4 != NULL){
-		process_cleanup();
-		printf ("%s: exit(%d)\n", curr -> name, curr -> exit_status);
-	}
 
 	sema_up(&curr -> wait_sema);
 	sema_down(&curr -> free_sema);
@@ -543,6 +511,7 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 
 	/* Open executable file. */
 	file = filesys_open(file_name);
+
 	if (file == NULL) {
 		printf("load: %s: open failed\n", file_name);
 		goto done;
@@ -576,43 +545,43 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 		file_ofs += sizeof phdr;
 
 		switch (phdr.p_type) {
-		case PT_NULL:
-		case PT_NOTE:
-		case PT_PHDR:
-		case PT_STACK:
-		default:
-			/* Ignore this segment. */
-			break;
-		case PT_DYNAMIC:
-		case PT_INTERP:
-		case PT_SHLIB:
-			goto done;
-		case PT_LOAD:
-			if (validate_segment(&phdr, file)) {
-				bool writable = (phdr.p_flags & PF_W) != 0;
-				uint64_t file_page = phdr.p_offset & ~PGMASK;
-				uint64_t mem_page = phdr.p_vaddr & ~PGMASK;
-				uint64_t page_offset = phdr.p_vaddr & PGMASK;
-				uint32_t read_bytes, zero_bytes;
+			case PT_NULL:
+			case PT_NOTE:
+			case PT_PHDR:
+			case PT_STACK:
+			default:
+				/* Ignore this segment. */
+				break;
+			case PT_DYNAMIC:
+			case PT_INTERP:
+			case PT_SHLIB:
+				goto done;
+			case PT_LOAD:
+				if (validate_segment(&phdr, file)) {
+					bool writable = (phdr.p_flags & PF_W) != 0;
+					uint64_t file_page = phdr.p_offset & ~PGMASK;
+					uint64_t mem_page = phdr.p_vaddr & ~PGMASK;
+					uint64_t page_offset = phdr.p_vaddr & PGMASK;
+					uint32_t read_bytes, zero_bytes;
 
-				if (phdr.p_filesz > 0) {
-					/* Normal segment.
-						 * Read initial part from disk and zero the rest. */
-					read_bytes = page_offset + phdr.p_filesz;
-					zero_bytes = (ROUND_UP(page_offset + phdr.p_memsz, PGSIZE) - read_bytes);
+					if (phdr.p_filesz > 0) {
+						/* Normal segment.
+							* Read initial part from disk and zero the rest. */
+						read_bytes = page_offset + phdr.p_filesz;
+						zero_bytes = (ROUND_UP(page_offset + phdr.p_memsz, PGSIZE) - read_bytes);
+					}
+
+					else {
+						/* Entirely zero.
+							* Don't read anything from disk. */
+						read_bytes = 0;
+						zero_bytes = ROUND_UP(page_offset + phdr.p_memsz, PGSIZE);
+					}
+
+					if (!load_segment(file, file_page, (void *)mem_page,
+									read_bytes, zero_bytes, writable))
+						goto done;
 				}
-
-				else {
-					/* Entirely zero.
-						 * Don't read anything from disk. */
-					read_bytes = 0;
-					zero_bytes = ROUND_UP(page_offset + phdr.p_memsz, PGSIZE);
-				}
-
-				if (!load_segment(file, file_page, (void *)mem_page,
-								  read_bytes, zero_bytes, writable))
-					goto done;
-			}
 			
 			else
 				goto done;
@@ -687,7 +656,7 @@ static bool validate_segment(const struct PHDR *phdr, struct file *file) {
  * outside of #ifndef macro. */
 
 /* load() helpers. */
-static bool install_page(void *upage, void *kpage, bool writable);
+bool install_page(void *upage, void *kpage, bool writable);
 
 /* Loads a segment starting at offset OFS in FILE at address
  * UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
@@ -758,37 +727,6 @@ bool setup_stack(struct intr_frame *if_) {
 	if (kpage != NULL) {
 		success = install_page(((uint8_t *)USER_STACK) - PGSIZE, kpage, true);
 
-		// if (success) {
-		// 	char **argv = (char **)if_ -> R.rsi;
-		// 	uint64_t argc = if_ -> R.rdi;
-		// 	uint64_t stack_pos = USER_STACK;
-		// 	uint64_t args_pos[32];
-
-		// 	for (int i = 0; i < (int)argc; i++) {
-		// 		size_t tmplen = strlen(argv[i]);
-		// 		stack_pos = stack_pos - tmplen - 1;
-		// 		strlcpy((char *)stack_pos, argv[i], 128);
-		// 		args_pos[i] = stack_pos;
-		// 	}
-
-		// 	stack_pos -= WORD_ALIGN(stack_pos);
-
-		// 	for (int i = argc; i >= 0; i--) {
-		// 		stack_pos -= 8;
-
-		// 		if (i == (int)argc) *(char *)(stack_pos) = 0;
-
-		// 		else
-		// 			memcpy((void *)stack_pos, &(args_pos[i]), 8);
-		// 	}
-
-		// 	stack_pos -= 8;
-		// 	*((uint64_t *)stack_pos) = 0;
-		// 	if_ -> rsp = stack_pos;
-		// 	if_ -> R.rsi = stack_pos + 8;
-		// 	if_ -> R.rdi = argc;
-		// }
-
 		if (success)
 			if_ -> rsp = USER_STACK;
 
@@ -830,6 +768,8 @@ bool lazy_load_segment(struct page *page, void *aux) {
 	size_t page_read_bytes = ((struct box *)aux) -> page_read_bytes;
 	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
+	file_seek(file, ofs);
+
 	if (file_read(file, page -> frame -> kva, page_read_bytes) != (int)page_read_bytes) {
 		palloc_free_page(page -> frame -> kva);
 		return false;
@@ -853,7 +793,7 @@ bool lazy_load_segment(struct page *page, void *aux) {
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
-bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
+static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 			 uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT(pg_ofs(upage) == 0);
@@ -902,38 +842,6 @@ bool setup_stack(struct intr_frame *if_) {
 		if_ -> rsp = USER_STACK;
 		thread_current() -> stack_bottom = stack_bottom;
 	}
-	
-	// memset(stack_bottom, 0, PGSIZE);
-
-	// char **argv = (char **)if_ -> R.rsi;
-	// uint64_t argc = if_ -> R.rdi;
-	// uint64_t stack_pos = USER_STACK;
-	// uint64_t args_pos[32];
-
-	// for (int i = 0; i < (int)argc; i++) {
-	// 	size_t tmplen = strlen(argv[i]);
-	// 	stack_pos = stack_pos - tmplen - 1;
-	// 	strlcpy((char *)stack_pos, argv[i], 128);
-	// 	args_pos[i] = stack_pos;
-	// }
-
-	// stack_pos -= WORD_ALIGN(stack_pos);
-
-	// for (int i = argc; i >= 0; i--) {
-	// 	stack_pos -= 8;
-
-	// 	if (i == (int)argc)
-	// 		*(char *)(stack_pos) = 0;
-
-	// 	else
-	// 		memcpy((void *)stack_pos, &(args_pos[i]), 8);
-	// }
-
-	// stack_pos -= 8;
-	// *((uint64_t *)stack_pos) = 0;
-	// if_ -> rsp = stack_pos;
-	// if_ -> R.rsi = stack_pos + 8;
-	// if_ -> R.rdi = argc;
 	
 	return success;
 }

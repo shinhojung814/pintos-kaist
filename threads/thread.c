@@ -330,10 +330,10 @@ void thread_exit(void) {
 /* Yields the CPU. The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
 void thread_yield(void) {
-	ASSERT(!intr_context());
-
 	struct thread *curr = thread_current();
 	enum intr_level old_level = intr_disable();
+
+	ASSERT(!intr_context());
 
 	if (curr != idle_thread)
 		list_insert_ordered(&ready_list, &curr -> elem, compare_thread_priority, NULL);

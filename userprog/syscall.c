@@ -22,7 +22,7 @@ void syscall_handler(struct intr_frame *);
 
 static struct file *find_file_by_fd(int fd);
 
-struct page *check_address(void *addr);
+void check_address(const uint64_t *uaddr);
 void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write);
 void halt(void);
 void exit(int status);
@@ -82,7 +82,7 @@ void syscall_handler(struct intr_frame *f) {
 			break;
 		
 		case SYS_WAIT:
-			f -> R.rax = process_wait(f -> R.rdi);
+			f -> R.rax = wait(f -> R.rdi);
 			break;
 		
 		case SYS_CREATE:
@@ -101,7 +101,7 @@ void syscall_handler(struct intr_frame *f) {
 			f -> R.rax = filesize(f -> R.rdi);
 			break;
 		case SYS_READ:
-			f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
+			f -> R.rax = read(f -> R.rdi, f -> R.rsi, f -> R.rdx);
 			break;
 		
 		case SYS_WRITE:
@@ -130,44 +130,31 @@ void syscall_handler(struct intr_frame *f) {
 	}
 }
 
-struct page *check_address(void *addr) {
-	// struct thread *curr = thread_current();
+void check_address(const uint64_t *uaddr) {
+	struct thread *curr = thread_current();
 
-	// if (uaddr == NULL || !(is_user_vaddr(uaddr)) || pml4_get_page(curr -> pml4, uaddr) == NULL)
-	// 	exit(-1);
-
-	// uint64_t *pte = pml4e_walk(curr -> pml4, (const uint64_t)uaddr, 0);
-
-	// if (pte == NULL)
-	// 	exit(-1);
-	
-	// struct page *page = spt_find_page(&curr -> spt, uaddr);
-	
-	// if (page == NULL)
-	// 	exit(-1);
-
-	if (is_kernel_vaddr(addr))
+	if (uaddr == NULL || !(is_kernel_vaddr(uaddr)) || pml4_get_page(curr -> pml4, uaddr) == NULL)
 		exit(-1);
 	
-	return spt_find_page(&thread_current() -> spt, addr);
+	return spt_find_page(&thread_current() -> spt, uaddr);
 }
 
-void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write) {
-	// struct page *page = spt_find_page(&thread_current() -> spt, ptr);
+// void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write) {
+// 	struct page *page = spt_find_page(&thread_current() -> spt, ptr);
 
-	// if (page == NULL || !page -> writable)
-	// 	exit(-1);
+// 	if (page == NULL || !page -> writable)
+// 		exit(-1);
 
-	for (int i = 0; i < size; i++) {
-		struct page *page = check_address(buffer + i);
+// 	for (int i = 0; i < size; i++) {
+// 		struct page *page = check_address(buffer + i);
 
-		if (page == NULL)
-			exit(-1);
+// 		if (page == NULL)
+// 			exit(-1);
 		
-		if (to_write == true && page -> writable == false)
-			exit(-1);
-	}
-}
+// 		if (to_write == true && page -> writable == false)
+// 			exit(-1);
+// 	}
+// }
 
 static struct file *find_file_by_fd(int fd) {
 	struct thread *curr = thread_current();
@@ -212,6 +199,34 @@ void exit(int status) {
 
 	printf("%s: exit(%d)\n", thread_name(), status);
 	thread_exit();
+}
+
+tid_t fork(const char *thread_name, struct intr_frame *f) {
+	return process_fork(thread_name, f);
+}
+
+int exec(char *file_name) {
+	struct thread *curr = thread_current();
+
+	check_address(file_name);
+
+	int file_size = strlen(file_name) + 1;
+	char *fn_copy = palloc_get_page(PAL_ZERO);
+
+	if (fn_copy == NULL)
+		exit(-1);
+	
+	strlcpy(fn_copy, file_name, file_size);
+
+	if (process_exec(fn_copy) == -1)
+		return -1;
+
+	NOT_REACHED();
+	return 0;
+}
+
+int wait(tid_t tid) {
+	return process_wait(tid);
 }
 
 bool create(const char *file, unsigned initial_size) {
@@ -285,9 +300,7 @@ int read(int fd, void *buffer, unsigned size) {
 	}
 
 	else {
-		check_address(buffer);
 		lock_acquire(&file_lock);
-
 		ret = file_read(file_object, buffer, size);
 		lock_release(&file_lock);
 	}
@@ -404,28 +417,4 @@ int dup2(int old_fd, int new_fd) {
 	close(new_fd);
 	fdt[new_fd] = file_object;
 	return new_fd;
-}
-
-tid_t fork(const char *thread_name, struct intr_frame *f) {
-	return process_fork(thread_name, f);
-}
-
-int exec(char *file_name) {
-	struct thread *curr = thread_current();
-
-	check_address(file_name);
-
-	int file_size = strlen(file_name) + 1;
-	char *fn_copy = palloc_get_page(PAL_ZERO);
-
-	if (fn_copy == NULL)
-		exit(-1);
-	
-	strlcpy(fn_copy, file_name, file_size);
-
-	if (process_exec(fn_copy) == -1)
-		return -1;
-
-	NOT_REACHED();
-	return 0;
 }
