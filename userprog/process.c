@@ -127,6 +127,7 @@ tid_t process_create_initd(const char *file_name) {
 
 	if (fn_copy == NULL)
 		return TID_ERROR;
+	
 	strlcpy(fn_copy, file_name, PGSIZE);
 
 	char *save_ptr;
@@ -333,9 +334,6 @@ int process_exec(void *f_name) {
 	_if.cs = SEL_UCSEG;
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
-	/* We first kill the current context */
-	process_cleanup();
-
 	char *argv[30];
 	int argc = 0;
 
@@ -348,6 +346,13 @@ int process_exec(void *f_name) {
 		argc++;
 	}
 
+	/* We first kill the current context */
+	process_cleanup();
+
+#ifdef VM
+	supplemental_page_table_init(&thread_current() -> spt);
+#endif
+
 	/* And then load the binary */
 	success = load(file_name, &_if);
 
@@ -358,6 +363,7 @@ int process_exec(void *f_name) {
 	}
 
 	void **rspp = &_if.rsp;
+
 	argument_stack(argv, argc, rspp);
 
 	_if.R.rdi = argc;
@@ -400,7 +406,6 @@ void argument_stack(char **argv, int argc, void **rspp) {
 		**(char ***)rspp = argv[i];
 	}
 
-	// 4. Return address
 	(*rspp) -= PTR_SIZE;
 	**(void ***)rspp = (void *)0;
 }
@@ -418,7 +423,6 @@ int process_wait(tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	struct thread *curr = thread_current();
 	struct thread *child = get_child_process(child_tid);
 
 	if (child == NULL)
@@ -521,10 +525,14 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 	file_deny_write(file);
 
 	/* Read and verify executable header. */
-	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 0x3E // amd64
-		|| ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct PHDR) || ehdr.e_phnum > 1024) {
-		printf("load: %s: error loading executable\n", file_name);
-
+	if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr
+			|| memcmp(ehdr.e_ident, "\177ELF\2\1\1", 7)
+			|| ehdr.e_type != 2
+			|| ehdr.e_machine != 0x3E // amd64
+			|| ehdr.e_version != 1
+			|| ehdr.e_phentsize != sizeof(struct PHDR)
+			|| ehdr.e_phnum > 1024) {
+		printf("load: %s: error loading executable\n", file_name);	
 		goto done;
 	}
 
@@ -578,8 +586,7 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 						zero_bytes = ROUND_UP(page_offset + phdr.p_memsz, PGSIZE);
 					}
 
-					if (!load_segment(file, file_page, (void *)mem_page,
-									read_bytes, zero_bytes, writable))
+					if (!load_segment(file, file_page, (void *)mem_page, read_bytes, zero_bytes, writable))
 						goto done;
 				}
 			
@@ -764,11 +771,11 @@ bool lazy_load_segment(struct page *page, void *aux) {
 	/* This called when the first page fault occurs on address VA. */
 	/* VA is available when calling this function. */
 	struct file *file = ((struct box *)aux) -> file;
-	off_t ofs = ((struct box *)aux) -> ofs;
+	off_t offsetof = ((struct box *)aux) -> offset;
 	size_t page_read_bytes = ((struct box *)aux) -> page_read_bytes;
 	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-	file_seek(file, ofs);
+	file_seek(file, offsetof);
 
 	if (file_read(file, page -> frame -> kva, page_read_bytes) != (int)page_read_bytes) {
 		palloc_free_page(page -> frame -> kva);
@@ -810,7 +817,7 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		struct box *box = (struct box *)malloc(sizeof(struct box));
 
 		box -> file = file;
-		box -> ofs = ofs;
+		box -> offset = ofs;
 		box -> page_read_bytes = page_read_bytes;
 		
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, box)) {

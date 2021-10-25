@@ -50,9 +50,10 @@ struct page {
 
 	/* Your implementation */
 	uint8_t type;
-	struct hash_elem hash_elem;
 	bool writable;
 	bool is_loaded;
+
+	struct hash_elem hash_elem;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -83,13 +84,6 @@ struct page_operations {
 	void (*destroy)(struct page *);
 	enum vm_type type;
 };
-
-// struct load_info {
-// 	struct file *file;
-// 	off_t ofs;
-// 	size_t page_read_bytes;
-// 	size_t page_zero_bytes;
-// };
 
 #define swap_in(page, v) (page) -> operations -> swap_in((page), v)
 #define swap_out(page) (page) -> operations -> swap_out(page)

@@ -22,8 +22,9 @@ void syscall_handler(struct intr_frame *);
 
 static struct file *find_file_by_fd(int fd);
 
-void check_address(const uint64_t *uaddr);
+struct page *check_address(void *addr);
 void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write);
+
 void halt(void);
 void exit(int status);
 bool create(const char *file, unsigned initial_size);
@@ -63,6 +64,10 @@ void syscall_init(void) {
 }
 
 void syscall_handler(struct intr_frame *f) {
+#ifdef VM
+	thread_current() -> rsp_stack = f -> rsp;
+#endif
+
 	switch (f -> R.rax) {
 		case SYS_HALT:
 			halt();
@@ -101,10 +106,12 @@ void syscall_handler(struct intr_frame *f) {
 			f -> R.rax = filesize(f -> R.rdi);
 			break;
 		case SYS_READ:
+			check_valid_buffer(f -> R.rsi, f -> R.rdx, f -> rsp, 1);
 			f -> R.rax = read(f -> R.rdi, f -> R.rsi, f -> R.rdx);
 			break;
 		
 		case SYS_WRITE:
+			check_valid_buffer(f -> R.rsi, f -> R.rdx, f -> rsp, 0);
 			f -> R.rax = write(f -> R.rdi, f -> R.rsi, f -> R.rdx);
 			break;
 		
@@ -130,13 +137,20 @@ void syscall_handler(struct intr_frame *f) {
 	}
 }
 
-void check_address(const uint64_t *uaddr) {
-	struct thread *curr = thread_current();
+// void check_address(const uint64_t *uaddr) {
+// 	struct thread *curr = thread_current();
 
-	if (uaddr == NULL || !(is_kernel_vaddr(uaddr)) || pml4_get_page(curr -> pml4, uaddr) == NULL)
+// 	if (uaddr == NULL || !(is_kernel_vaddr(uaddr)) || pml4_get_page(curr -> pml4, uaddr) == NULL)
+// 		exit(-1);
+	
+// 	return spt_find_page(&thread_current() -> spt, uaddr);
+// }
+
+struct page *check_address(void *addr) {
+	if (is_kernel_vaddr(addr))
 		exit(-1);
 	
-	return spt_find_page(&thread_current() -> spt, uaddr);
+	return spt_find_page(&thread_current() -> spt, addr);
 }
 
 // void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write) {
@@ -155,6 +169,18 @@ void check_address(const uint64_t *uaddr) {
 // 			exit(-1);
 // 	}
 // }
+
+void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write) {
+	for (int i = 0; i < size; i++) {
+		struct page *page = check_address(buffer + i);
+
+		if (page == NULL)
+			exit(-1);
+		
+		if (to_write == true && page -> writable == false)
+			exit(-1);
+	}
+}
 
 static struct file *find_file_by_fd(int fd) {
 	struct thread *curr = thread_current();
@@ -206,8 +232,6 @@ tid_t fork(const char *thread_name, struct intr_frame *f) {
 }
 
 int exec(char *file_name) {
-	struct thread *curr = thread_current();
-
 	check_address(file_name);
 
 	int file_size = strlen(file_name) + 1;
@@ -230,8 +254,10 @@ int wait(tid_t tid) {
 }
 
 bool create(const char *file, unsigned initial_size) {
-	check_address(file);
-	return filesys_create(file, initial_size);
+	if (file)
+		return filesys_create(file, initial_size);
+	else
+		exit(-1);
 }
 
 bool remove(const char *file) {
@@ -241,6 +267,9 @@ bool remove(const char *file) {
 
 int open(const char *file) {
 	check_address(file);
+
+	if (file == NULL)
+		return -1;
 
 	struct file *file_object = filesys_open(file);
 
@@ -265,8 +294,6 @@ int filesize(int fd) {
 }
 
 int read(int fd, void *buffer, unsigned size) {
-	check_address(buffer);
-
 	struct thread *curr = thread_current();
 	struct file *file_object = find_file_by_fd(fd);
 	int ret;
@@ -309,8 +336,6 @@ int read(int fd, void *buffer, unsigned size) {
 }
 
 int write(int fd, const void *buffer, unsigned size) {
-	check_address(buffer);
-
 	struct file *file_object = find_file_by_fd(fd);
 	int ret;
 

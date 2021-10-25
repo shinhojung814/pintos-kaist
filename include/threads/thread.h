@@ -149,19 +149,6 @@ struct thread {
 	unsigned magic;                     /* Detects stack overflow. */
 };
 
-struct thread_file {
-	struct file* file;
-	struct dir* dir;
-	int fd;
-	struct list_elem elem;
-	//for dup2, default -1
-	int dup_tag;
-	int dup_cnt;
-	//for stdin and stdout
-	int std;
-};
-
-
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
