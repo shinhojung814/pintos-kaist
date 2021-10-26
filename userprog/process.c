@@ -1082,7 +1082,7 @@ __do_fork (void *aux) {
 	// other test-cases like multi-oom don't need this feature
 	const int MAPLEN = 10;
 	struct MapElem map[10]; // key - parent's struct file * , value - child's newly created struct file *
-	int dupCount = 0;		// index for filling map
+	int dup_count = 0;		// index for filling map
 
 	for (int i = 0; i < FDCOUNT_LIMIT; i++)
 	{
@@ -1111,10 +1111,10 @@ __do_fork (void *aux) {
 				new_file = file; // 1 STDIN, 2 STDOUT
 
 			current->fd_table[i] = new_file;
-			if (dupCount < MAPLEN)
+			if (dup_count < MAPLEN)
 			{
-				map[dupCount].key = file;
-				map[dupCount++].value = new_file;
+				map[dup_count].key = file;
+				map[dup_count++].value = new_file;
 			}
 		}
 	}

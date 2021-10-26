@@ -773,10 +773,10 @@ void close(int fd) {
 	if (fd <=1 || fileobj <= 2)
 		return;
 
-	if (fileobj->dupCount == 0)
+	if (fileobj->dup_count == 0)
 		file_close(fileobj);
 	else
-		fileobj->dupCount--;
+		fileobj->dup_count--;
 }
 
 void remove_file_from_fdt(int fd) {
@@ -884,7 +884,7 @@ int dup2(int oldfd, int newfd)
 	else if (fileobj == STDOUT)
 		cur->stdout_count++;
 	else
-		fileobj->dupCount++;
+		fileobj->dup_count++;
 
 	close(newfd);
 	fdt[newfd] = fileobj;
