@@ -12,7 +12,8 @@
         "vm.h": "c",
         "inspect.h": "c",
         "anon.h": "c",
-        "process.h": "c"
+        "process.h": "c",
+        "off_t.h": "c"
     },
     "C_Cpp.errorSquiggles": "Disabled"
 }
