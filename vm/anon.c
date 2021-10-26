@@ -10,9 +10,6 @@ static bool anon_swap_in(struct page *page, void *kva);
 static bool anon_swap_out(struct page *page);
 static void anon_destroy(struct page *page);
 
-struct bitmap *swap_table;
-const size_t SECTORS_PER_PAGE = PGSIZE / DISK_SECTOR_SIZE;
-
 /* DO NOT MODIFY this struct */
 static const struct page_operations anon_ops = {
 	.swap_in = anon_swap_in,
@@ -20,6 +17,9 @@ static const struct page_operations anon_ops = {
 	.destroy = anon_destroy,
 	.type = VM_ANON,
 };
+
+struct bitmap *swap_table;
+const size_t SECTORS_PER_PAGE = PGSIZE / DISK_SECTOR_SIZE;
 
 /* Initialize the data for anonymous pages */
 void vm_anon_init(void) {

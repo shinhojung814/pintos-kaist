@@ -32,7 +32,7 @@ enum vm_type page_get_type(struct page *page) {
 	int type = VM_TYPE(page -> operations -> type);
 	switch (type) {
 		case VM_UNINIT:
-			return VM_TYPE (page -> uninit.type);
+			return VM_TYPE(page -> uninit.type);
 		default:
 			return type;
 	}
@@ -74,6 +74,7 @@ bool vm_alloc_page_with_initializer(enum vm_type type, void *upage,
 				initializer = file_backed_initializer;
 				break;
 		}
+
 		uninit_new(page, upage, init, type, aux, initializer);
 
 		page -> writable = writable;
@@ -139,7 +140,7 @@ static struct frame *vm_get_victim(void) {
 static struct frame *vm_evict_frame(void) {
 	struct frame *victim = vm_get_victim();
 	
-	// swap_out(victim -> page);
+	swap_out(victim -> page);
 	return victim;
 }
 
@@ -168,41 +169,42 @@ static struct frame *vm_get_frame(void) {
 
 /* Growing the stack. */
 static void vm_stack_growth(void *addr UNUSED) {
-	// if (vm_alloc_page(VM_ANON | VM_MARKER_0, addr, 1)) {
-	// 	vm_claim_page(addr);
-	// 	thread_current() -> stack_bottom -= PGSIZE;
-	// }
+	if (vm_alloc_page(VM_ANON | VM_MARKER_0, addr, 1)) {
+		vm_claim_page(addr);
+		thread_current() -> stack_bottom -= PGSIZE;
+	}
 }
 
 /* Handle the fault on write_protected page */
 static bool vm_handle_wp(struct page *page UNUSED) {
-	// return false;
 }
 
 /* Return true on success */
-bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr,
-		bool user, bool write UNUSED, bool not_present) {
+bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
+		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt = &thread_current() -> spt;
 
 	/* Validate the fault */
 	if (is_kernel_vaddr(addr))
 		return false;
 
-	// void *rsp_stack = is_kernel_vaddr(f -> rsp) ? thread_current() -> rsp_stack : f -> rsp;
+	void *rsp_stack = is_kernel_vaddr(f -> rsp) ? thread_current() -> rsp_stack : f -> rsp;
 
-	// if (not_present) {
-	// 	if (!vm_claim_page(addr)) {
-	// 		if (rsp_stack - 8 <= addr && USER_STACK - 0x100000 <= addr && addr <= USER_STACK) {
-	// 			vm_stack_growth(thread_current() -> stack_bottom - PGSIZE);
-	// 			return true;
-	// 		}
-	// 		return false;
-	// 	}
+	if (not_present) {
+		if (!vm_claim_page(addr)) {
+			if (rsp_stack - 8 <= addr && USER_STACK - 0x100000 <= addr && addr <= USER_STACK) {
+				vm_stack_growth(thread_current() -> stack_bottom - PGSIZE);
+
+				return true;
+			}
+
+			return false;
+		}
 		
-	// 	else
-	// 		return true;
-	// }
-	// return false;
+		else
+			return true;
+	}
+	return false;
 }
 
 /* Free the page.
@@ -295,7 +297,7 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt) {
 		struct page *page = hash_entry(hash_cur(&i), struct page, hash_elem);
 
 		if (page -> operations -> type == VM_FILE) {
-			// do_munmap(page -> va);
+			do_munmap(page -> va);
 			// destroy(page);
 		}
 		
@@ -303,7 +305,7 @@ void supplemental_page_table_kill(struct supplemental_page_table *spt) {
 	}
 }
 
-void spt_destroy(struct hash_elem *e, void *aux UNUSED) {
+void spt_destroy(struct hash_elem *e, void *aux) {
 	const struct page *p = hash_entry(e, struct page, hash_elem);
 	free(p);
 }

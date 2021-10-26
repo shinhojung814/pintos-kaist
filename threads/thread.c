@@ -257,9 +257,7 @@ void thread_block(void) {
 	ASSERT(!intr_context());
 	ASSERT(intr_get_level() == INTR_OFF);
 
-	struct thread *curr = thread_current();
-
-	curr -> status = THREAD_BLOCKED;
+	thread_current() -> status = THREAD_BLOCKED;
 	schedule();
 }
 
@@ -314,10 +312,10 @@ tid_t thread_tid(void) {
 
 /* Deschedules the current thread and destroys it. Never returns to the caller. */
 void thread_exit(void) {
-	ASSERT (!intr_context());
+	ASSERT(!intr_context());
 
 #ifdef USERPROG
-	process_exit ();
+	process_exit();
 #endif
 
 	/* Just set our status to dying and schedule another process.

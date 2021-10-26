@@ -770,9 +770,9 @@ bool lazy_load_segment(struct page *page, void *aux) {
 	/* Load the segment from the file */
 	/* This called when the first page fault occurs on address VA. */
 	/* VA is available when calling this function. */
-	struct file *file = ((struct box *)aux) -> file;
-	off_t offsetof = ((struct box *)aux) -> offset;
-	size_t page_read_bytes = ((struct box *)aux) -> page_read_bytes;
+	struct file *file = ((struct container *)aux) -> file;
+	off_t offsetof = ((struct container *)aux) -> offset;
+	size_t page_read_bytes = ((struct container *)aux) -> page_read_bytes;
 	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 	file_seek(file, offsetof);
@@ -814,13 +814,13 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* Set up aux to pass information to the lazy_load_segment. */
-		struct box *box = (struct box *)malloc(sizeof(struct box));
+		struct container *container = (struct container *)malloc(sizeof(struct container));
 
-		box -> file = file;
-		box -> offset = ofs;
-		box -> page_read_bytes = page_read_bytes;
+		container -> file = file;
+		container -> offset = ofs;
+		container -> page_read_bytes = page_read_bytes;
 		
-		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, box)) {
+		if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable, lazy_load_segment, container)) {
 			return false;
 		}
 
