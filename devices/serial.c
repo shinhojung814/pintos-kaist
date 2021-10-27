@@ -82,26 +82,26 @@ serial_init_queue (void) {
 	enum intr_level old_level;
 
 	if (mode == UNINIT)
-		init_poll ();
+		init_poll();
 	ASSERT (mode == POLL);
 
 	intr_register_ext (0x20 + 4, serial_interrupt, "serial");
 	mode = QUEUE;
-	old_level = intr_disable ();
-	write_ier ();
+	old_level = intr_disable();
+	write_ier();
 	intr_set_level (old_level);
 }
 
 /* Sends BYTE to the serial port. */
 void
 serial_putc (uint8_t byte) {
-	enum intr_level old_level = intr_disable ();
+	enum intr_level old_level = intr_disable();
 
 	if (mode != QUEUE) {
 		/* If we're not set up for interrupt-driven I/O yet,
 		   use dumb polling to transmit a byte. */
 		if (mode == UNINIT)
-			init_poll ();
+			init_poll();
 		putc_poll (byte);
 	} else {
 		/* Otherwise, queue a byte and update the interrupt enable
@@ -116,7 +116,7 @@ serial_putc (uint8_t byte) {
 		}
 
 		intq_putc (&txq, byte);
-		write_ier ();
+		write_ier();
 	}
 
 	intr_set_level (old_level);
@@ -126,7 +126,7 @@ serial_putc (uint8_t byte) {
    mode. */
 void
 serial_flush (void) {
-	enum intr_level old_level = intr_disable ();
+	enum intr_level old_level = intr_disable();
 	while (!intq_empty (&txq))
 		putc_poll (intq_getc (&txq));
 	intr_set_level (old_level);
@@ -138,9 +138,9 @@ serial_flush (void) {
    to or removed from the buffer. */
 void
 serial_notify (void) {
-	ASSERT (intr_get_level () == INTR_OFF);
+	ASSERT (intr_get_level() == INTR_OFF);
 	if (mode == QUEUE)
-		write_ier ();
+		write_ier();
 }
 
 /* Configures the serial port for BPS bits per second. */
@@ -167,7 +167,7 @@ static void
 write_ier (void) {
 	uint8_t ier = 0;
 
-	ASSERT (intr_get_level () == INTR_OFF);
+	ASSERT (intr_get_level() == INTR_OFF);
 
 	/* Enable transmit interrupt if we have any characters to
 	   transmit. */
@@ -176,7 +176,7 @@ write_ier (void) {
 
 	/* Enable receive interrupt if we have room to store any
 	   characters we receive. */
-	if (!input_full ())
+	if (!input_full())
 		ier |= IER_RECV;
 
 	outb (IER_REG, ier);
@@ -186,7 +186,7 @@ write_ier (void) {
    and then transmits BYTE. */
 static void
 putc_poll (uint8_t byte) {
-	ASSERT (intr_get_level () == INTR_OFF);
+	ASSERT (intr_get_level() == INTR_OFF);
 
 	while ((inb (LSR_REG) & LSR_THRE) == 0)
 		continue;
@@ -202,7 +202,7 @@ serial_interrupt (struct intr_frame *f UNUSED) {
 
 	/* As long as we have room to receive a byte, and the hardware
 	   has a byte for us, receive a byte.  */
-	while (!input_full () && (inb (LSR_REG) & LSR_DR) != 0)
+	while (!input_full() && (inb (LSR_REG) & LSR_DR) != 0)
 		input_putc (inb (RBR_REG));
 
 	/* As long as we have a byte to transmit, and the hardware is
@@ -211,5 +211,5 @@ serial_interrupt (struct intr_frame *f UNUSED) {
 		outb (THR_REG, intq_getc (&txq));
 
 	/* Update interrupt enable register based on queue status. */
-	write_ier ();
+	write_ier();
 }

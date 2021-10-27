@@ -71,13 +71,13 @@ static __inline int64_t syscall (uint64_t num_, uint64_t a1_, uint64_t a2_,
 void
 halt (void) {
 	syscall0 (SYS_HALT);
-	NOT_REACHED ();
+	NOT_REACHED();
 }
 
 void
 exit (int status) {
 	syscall1 (SYS_EXIT, status);
-	NOT_REACHED ();
+	NOT_REACHED();
 }
 
 pid_t

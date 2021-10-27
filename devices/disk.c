@@ -117,7 +117,7 @@ disk_init (void) {
 				c->irq = 15 + 0x20;
 				break;
 			default:
-				NOT_REACHED ();
+				NOT_REACHED();
 		}
 		lock_init (&c->lock);
 		c->expecting_interrupt = false;
@@ -153,7 +153,7 @@ disk_init (void) {
 	}
 
 	/* DO NOT MODIFY BELOW LINES. */
-	register_disk_inspect_intr ();
+	register_disk_inspect_intr();
 }
 
 /* Prints disk statistics. */
@@ -426,7 +426,7 @@ static void
 issue_pio_command (struct channel *c, uint8_t command) {
 	/* Interrupts must be enabled or our semaphore will never be
 	   up'd by the completion handler. */
-	ASSERT (intr_get_level () == INTR_ON);
+	ASSERT (intr_get_level() == INTR_ON);
 
 	c->expecting_interrupt = true;
 	outb (reg_command (c), command);
@@ -526,7 +526,7 @@ interrupt_handler (struct intr_frame *f) {
 			return;
 		}
 
-	NOT_REACHED ();
+	NOT_REACHED();
 }
 
 static void

@@ -49,17 +49,17 @@ void
 vga_putc (int c) {
 	/* Disable interrupts to lock out interrupt handlers
 	   that might write to the console. */
-	enum intr_level old_level = intr_disable ();
+	enum intr_level old_level = intr_disable();
 
-	init ();
+	init();
 
 	switch (c) {
 		case '\n':
-			newline ();
+			newline();
 			break;
 
 		case '\f':
-			cls ();
+			cls();
 			break;
 
 		case '\b':
@@ -74,19 +74,19 @@ vga_putc (int c) {
 		case '\t':
 			cx = ROUND_UP (cx + 1, 8);
 			if (cx >= COL_CNT)
-				newline ();
+				newline();
 			break;
 
 		default:
 			fb[cy][cx][0] = c;
 			fb[cy][cx][1] = GRAY_ON_BLACK;
 			if (++cx >= COL_CNT)
-				newline ();
+				newline();
 			break;
 	}
 
 	/* Update cursor position. */
-	move_cursor ();
+	move_cursor();
 
 	intr_set_level (old_level);
 }
@@ -100,7 +100,7 @@ cls (void) {
 		clear_row (y);
 
 	cx = cy = 0;
-	move_cursor ();
+	move_cursor();
 }
 
 /* Clears row Y to spaces. */

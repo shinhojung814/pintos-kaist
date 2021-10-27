@@ -14,7 +14,7 @@ void vm_init(void) {
 	vm_anon_init();
 	vm_file_init();
 #ifdef EFILESYS
-	pagecache_init();
+	page_cache_init();
 #endif
 	register_inspect_intr();
 	list_init(&frame_table);

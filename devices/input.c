@@ -16,11 +16,11 @@ input_init (void) {
    Interrupts must be off and the buffer must not be full. */
 void
 input_putc (uint8_t key) {
-	ASSERT (intr_get_level () == INTR_OFF);
+	ASSERT (intr_get_level() == INTR_OFF);
 	ASSERT (!intq_full (&buffer));
 
 	intq_putc (&buffer, key);
-	serial_notify ();
+	serial_notify();
 }
 
 /* Retrieves a key from the input buffer.
@@ -30,9 +30,9 @@ input_getc (void) {
 	enum intr_level old_level;
 	uint8_t key;
 
-	old_level = intr_disable ();
+	old_level = intr_disable();
 	key = intq_getc (&buffer);
-	serial_notify ();
+	serial_notify();
 	intr_set_level (old_level);
 
 	return key;
@@ -43,6 +43,6 @@ input_getc (void) {
    Interrupts must be off. */
 bool
 input_full (void) {
-	ASSERT (intr_get_level () == INTR_OFF);
+	ASSERT (intr_get_level() == INTR_OFF);
 	return intq_full (&buffer);
 }

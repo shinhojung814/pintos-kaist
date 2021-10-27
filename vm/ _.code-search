@@ -1,0 +1,461 @@
+# Query:  ()
+# ContextLines: 1
+
+144 results - 18 files
+
+devices/disk.c:
+  119  			default:
+  120: 				NOT_REACHED();
+  121  		}
+
+  155  	/* DO NOT MODIFY BELOW LINES. */
+  156: 	register_disk_inspect_intr();
+  157  }
+
+  428  	   up'd by the completion handler. */
+  429: 	ASSERT (intr_get_level() == INTR_ON);
+  430  
+
+  528  
+  529: 	NOT_REACHED();
+  530  }
+
+devices/input.c:
+  18  input_putc (uint8_t key) {
+  19: 	ASSERT (intr_get_level() == INTR_OFF);
+  20  	ASSERT (!intq_full (&buffer));
+
+  22  	intq_putc (&buffer, key);
+  23: 	serial_notify();
+  24  }
+
+  32  
+  33: 	old_level = intr_disable();
+  34  	key = intq_getc (&buffer);
+  35: 	serial_notify();
+  36  	intr_set_level (old_level);
+
+  45  input_full (void) {
+  46: 	ASSERT (intr_get_level() == INTR_OFF);
+  47  	return intq_full (&buffer);
+
+devices/kbd.c:
+  137  			/* Append to keyboard buffer. */
+  138: 			if (!input_full()) {
+  139  				key_cnt++;
+
+devices/serial.c:
+   84  	if (mode == UNINIT)
+   85: 		init_poll();
+   86  	ASSERT (mode == POLL);
+
+   89  	mode = QUEUE;
+   90: 	old_level = intr_disable();
+   91: 	write_ier();
+   92  	intr_set_level (old_level);
+
+   97  serial_putc (uint8_t byte) {
+   98: 	enum intr_level old_level = intr_disable();
+   99  
+
+  103  		if (mode == UNINIT)
+  104: 			init_poll();
+  105  		putc_poll (byte);
+
+  118  		intq_putc (&txq, byte);
+  119: 		write_ier();
+  120  	}
+
+  128  serial_flush (void) {
+  129: 	enum intr_level old_level = intr_disable();
+  130  	while (!intq_empty (&txq))
+
+  140  serial_notify (void) {
+  141: 	ASSERT (intr_get_level() == INTR_OFF);
+  142  	if (mode == QUEUE)
+  143: 		write_ier();
+  144  }
+
+  169  
+  170: 	ASSERT (intr_get_level() == INTR_OFF);
+  171  
+
+  178  	   characters we receive. */
+  179: 	if (!input_full())
+  180  		ier |= IER_RECV;
+
+  188  putc_poll (uint8_t byte) {
+  189: 	ASSERT (intr_get_level() == INTR_OFF);
+  190  
+
+  204  	   has a byte for us, receive a byte.  */
+  205: 	while (!input_full() && (inb (LSR_REG) & LSR_DR) != 0)
+  206  		input_putc (inb (RBR_REG));
+
+  213  	/* Update interrupt enable register based on queue status. */
+  214: 	write_ier();
+  215  }
+
+devices/vga.c:
+   51  	   that might write to the console. */
+   52: 	enum intr_level old_level = intr_disable();
+   53  
+   54: 	init();
+   55  
+
+   57  		case '\n':
+   58: 			newline();
+   59  			break;
+
+   61  		case '\f':
+   62: 			cls();
+   63  			break;
+
+   76  			if (cx >= COL_CNT)
+   77: 				newline();
+   78  			break;
+
+   83  			if (++cx >= COL_CNT)
+   84: 				newline();
+   85  			break;
+
+   88  	/* Update cursor position. */
+   89: 	move_cursor();
+   90  
+
+  102  	cx = cy = 0;
+  103: 	move_cursor();
+  104  }
+
+filesys/fat.c:
+   49  	if (fat_fs->bs.magic != FAT_MAGIC)
+   50: 		fat_boot_create();
+   51: 	fat_fs_init();
+   52  }
+
+  118  	// Create FAT boot
+  119: 	fat_boot_create();
+  120: 	fat_fs_init();
+  121  
+
+filesys/filesys.c:
+   23  
+   24: 	inode_init();
+   25  
+   26  #ifdef EFILESYS
+   27: 	fat_init();
+   28  
+   29  	if (format)
+   30: 		do_format();
+   31  
+   32: 	fat_open();
+   33  #else
+   34  	/* Original FS */
+   35: 	free_map_init();
+   36  
+   37  	if (format)
+   38: 		do_format();
+   39  
+   40: 	free_map_open();
+   41  #endif
+
+   49  #ifdef EFILESYS
+   50: 	fat_close();
+   51  #else
+   52: 	free_map_close();
+   53  #endif
+
+   62  	disk_sector_t inode_sector = 0;
+   63: 	struct dir *dir = dir_open_root();
+   64  	bool success = (dir != NULL
+
+   81  filesys_open (const char *name) {
+   82: 	struct dir *dir = dir_open_root();
+   83  	struct inode *inode = NULL;
+
+   97  filesys_remove (const char *name) {
+   98: 	struct dir *dir = dir_open_root();
+   99  	bool success = dir != NULL && dir_remove (dir, name);
+
+  111  	/* Create FAT and save it to the disk. */
+  112: 	fat_create();
+  113: 	fat_close();
+  114  #else
+  115: 	free_map_create();
+  116  	if (!dir_create (ROOT_DIR_SECTOR, 16))
+  117  		PANIC ("root directory creation failed");
+  118: 	free_map_close();
+  119  #endif
+
+filesys/fsutil.c:
+  20  	printf ("Files in the root directory:\n");
+  21: 	dir = dir_open_root();
+  22  	if (dir == NULL)
+
+lib/stdio.c:
+  202  						default:
+  203: 							NOT_REACHED();
+  204  					}
+
+  248  						default:
+  249: 							NOT_REACHED();
+  250  					}
+
+  256  						case 'X': b = &base_X; break;
+  257: 						default: NOT_REACHED();
+  258  					}
+
+lib/kernel/console.c:
+   85  acquire_console (void) {
+   86: 	if (!intr_context() && use_console_lock) {
+   87  		if (lock_held_by_current_thread (&console_lock)) 
+
+   96  release_console (void) {
+   97: 	if (!intr_context() && use_console_lock) {
+   98  		if (console_lock_depth > 0)
+
+  108  console_locked_by_current_thread (void) {
+  109: 	return (intr_context()
+  110  			|| !use_console_lock
+
+  120  
+  121: 	acquire_console();
+  122  	__vprintf (format, args, vprintf_helper, &char_cnt);
+  123: 	release_console();
+  124  
+
+  131  puts (const char *s) {
+  132: 	acquire_console();
+  133  	while (*s != '\0')
+
+  135  	putchar_have_lock ('\n');
+  136: 	release_console();
+  137  
+
+  143  putbuf (const char *buffer, size_t n) {
+  144: 	acquire_console();
+  145  	while (n-- > 0)
+  146  		putchar_have_lock (*buffer++);
+  147: 	release_console();
+  148  }
+
+  152  putchar (int c) {
+  153: 	acquire_console();
+  154  	putchar_have_lock (c);
+  155: 	release_console();
+  156  
+
+  172  putchar_have_lock (uint8_t c) {
+  173: 	ASSERT (console_locked_by_current_thread());
+  174  	write_cnt++;
+
+lib/kernel/debug.c:
+  19  
+  20: 	intr_disable();
+  21: 	console_panic();
+  22  
+
+  31  
+  32: 		debug_backtrace();
+  33  	} else if (level == 2)
+
+  39  
+  40: 	serial_flush();
+  41  	if (power_off_when_done)
+  42: 		power_off();
+  43  	for (;;);
+
+lib/user/debug.c:
+  20  
+  21: 	debug_backtrace();
+  22  
+
+lib/user/syscall.c:
+  73  	syscall0 (SYS_HALT);
+  74: 	NOT_REACHED();
+  75  }
+
+  79  	syscall1 (SYS_EXIT, status);
+  80: 	NOT_REACHED();
+  81  }
+
+threads/init.c:
+   431  // 	/* Clear BSS and get machine's RAM size. */
+   432: // 	bss_init();
+   433  
+   434  // 	/* Break command line into arguments and parse options. */
+   435: // 	argv = read_command_line();
+   436  // 	argv = parse_options (argv);
+
+   439  // 	   then enable console locking. */
+   440: // 	thread_init();
+   441: // 	console_init();
+   442  
+   443  // 	/* Initialize memory system. */
+   444: // 	mem_end = palloc_init();
+   445: // 	malloc_init();
+   446  // 	paging_init (mem_end);
+
+   448  // #ifdef USERPROG
+   449: // 	tss_init();
+   450: // 	gdt_init();
+   451  // #endif
+
+   453  // 	/* Initialize interrupt handlers. */
+   454: // 	intr_init();
+   455: // 	timer_init();
+   456: // 	kbd_init();
+   457: // 	input_init();
+   458  // #ifdef USERPROG
+   459: // 	exception_init();
+   460: // 	syscall_init();
+   461  // #endif
+   462  // 	/* Start thread scheduler and enable interrupts. */
+   463: // 	thread_start();
+   464: // 	serial_init_queue();
+   465: // 	timer_calibrate();
+   466  
+
+   468  // 	/* Initialize file system. */
+   469: // 	disk_init();
+   470  // 	filesys_init (format_filesys);
+
+   473  // #ifdef VM
+   474: // 	vm_init();
+   475  // #endif
+
+   483  // 	if (power_off_when_done)
+   484: // 		power_off();
+   485: // 	thread_exit();
+   486  // }
+
+   570  // 		if (!strcmp (name, "-h"))
+   571: // 			usage();
+   572  // 		else if (!strcmp (name, "-q"))
+
+   690  // 			);
+   691: // 	power_off();
+   692  // }
+
+   699  // #ifdef FILESYS
+   700: // 	filesys_done();
+   701  // #endif
+   702  
+   703: // 	print_stats();
+   704  
+
+   712  // print_stats (void) {
+   713: // 	timer_print_stats();
+   714: // 	thread_print_stats();
+   715  // #ifdef FILESYS
+   716: // 	disk_print_stats();
+   717  // #endif
+   718: // 	console_print_stats();
+   719: // 	kbd_print_stats();
+   720  // #ifdef USERPROG
+   721: // 	exception_print_stats();
+   722  // #endif
+
+   797  	/* Clear BSS and get machine's RAM size. */
+   798: 	bss_init();
+   799  
+   800  	/* Break command line into arguments and parse options. */
+   801: 	argv = read_command_line();
+   802  	argv = parse_options (argv);
+
+   805  	   then enable console locking. */
+   806: 	thread_init();
+   807: 	console_init();
+   808  
+   809  	/* Initialize memory system. */
+   810: 	mem_end = palloc_init();
+   811: 	malloc_init();
+   812  	paging_init (mem_end);
+
+   814  #ifdef USERPROG
+   815: 	tss_init();
+   816: 	gdt_init();
+   817  #endif
+
+   819  	/* Initialize interrupt handlers. */
+   820: 	intr_init();
+   821: 	timer_init();
+   822: 	kbd_init();
+   823: 	input_init();
+   824  #ifdef USERPROG
+   825: 	exception_init();
+   826: 	syscall_init();
+   827  #endif
+   828  	/* Start thread scheduler and enable interrupts. */
+   829: 	thread_start();
+   830: 	serial_init_queue();
+   831: 	timer_calibrate();
+   832  
+
+   834  	/* Initialize file system. */
+   835: 	disk_init();
+   836  	filesys_init (format_filesys);
+
+   839  #ifdef VM
+   840: 	vm_init();
+   841  #endif
+
+   849  	if (power_off_when_done)
+   850: 		power_off();
+   851: 	thread_exit();
+   852  }
+
+   936  		if (!strcmp (name, "-h"))
+   937: 			usage();
+   938  		else if (!strcmp (name, "-q"))
+
+  1056  			);
+  1057: 	power_off();
+  1058  }
+
+  1065  #ifdef FILESYS
+  1066: 	filesys_done();
+  1067  #endif
+  1068  
+  1069: 	print_stats();
+  1070  
+
+  1078  print_stats (void) {
+  1079: 	timer_print_stats();
+  1080: 	thread_print_stats();
+  1081  #ifdef FILESYS
+  1082: 	disk_print_stats();
+  1083  #endif
+  1084: 	console_print_stats();
+  1085: 	kbd_print_stats();
+  1086  #ifdef USERPROG
+  1087: 	exception_print_stats();
+  1088  #endif
+
+threads/mmu.c:
+  259  		*pte &= ~PTE_P;
+  260: 		if (rcr3() == vtop (pml4))
+  261  			invlpg ((uint64_t) upage);
+
+  285  
+  286: 		if (rcr3() == vtop (pml4))
+  287  			invlpg ((uint64_t) vpage);
+
+  311  
+  312: 		if (rcr3() == vtop (pml4))
+  313  			invlpg ((uint64_t) vpage);
+
+threads/thread.c:
+  105  	 * This gdt does not include the user context.
+  106: 	 * The kernel will rebuild the gdt with user context, in gdt_init(). */
+  107  	struct desc_ptr gdt_ds = {
+
+userprog/gdt.c:
+  86  		(struct segment_descriptor64 *) &gdt[SEL_TSS >> 3];
+  87: 	struct task_state *tss = tss_get();
+  88  
+
+userprog/tss.c:
+  57  	tss = palloc_get_page (PAL_ASSERT | PAL_ZERO);
+  58: 	tss_update (thread_current());
+  59  }

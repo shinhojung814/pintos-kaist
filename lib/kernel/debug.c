@@ -17,8 +17,8 @@ debug_panic (const char *file, int line, const char *function,
 	static int level;
 	va_list args;
 
-	intr_disable ();
-	console_panic ();
+	intr_disable();
+	console_panic();
 
 	level++;
 	if (level == 1) {
@@ -29,7 +29,7 @@ debug_panic (const char *file, int line, const char *function,
 		printf ("\n");
 		va_end (args);
 
-		debug_backtrace ();
+		debug_backtrace();
 	} else if (level == 2)
 		printf ("Kernel PANIC recursion at %s:%d in %s().\n",
 				file, line, function);
@@ -37,8 +37,8 @@ debug_panic (const char *file, int line, const char *function,
 		/* Don't print anything: that's probably why we recursed. */
 	}
 
-	serial_flush ();
+	serial_flush();
 	if (power_off_when_done)
-		power_off ();
+		power_off();
 	for (;;);
 }

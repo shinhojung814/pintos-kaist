@@ -257,7 +257,7 @@ pml4_clear_page (uint64_t *pml4, void *upage) {
 
 	if (pte != NULL && (*pte & PTE_P) != 0) {
 		*pte &= ~PTE_P;
-		if (rcr3 () == vtop (pml4))
+		if (rcr3() == vtop (pml4))
 			invlpg ((uint64_t) upage);
 	}
 }
@@ -283,7 +283,7 @@ pml4_set_dirty (uint64_t *pml4, const void *vpage, bool dirty) {
 		else
 			*pte &= ~(uint32_t) PTE_D;
 
-		if (rcr3 () == vtop (pml4))
+		if (rcr3() == vtop (pml4))
 			invlpg ((uint64_t) vpage);
 	}
 }
@@ -309,7 +309,7 @@ pml4_set_accessed (uint64_t *pml4, const void *vpage, bool accessed) {
 		else
 			*pte &= ~(uint32_t) PTE_A;
 
-		if (rcr3 () == vtop (pml4))
+		if (rcr3() == vtop (pml4))
 			invlpg ((uint64_t) vpage);
 	}
 }

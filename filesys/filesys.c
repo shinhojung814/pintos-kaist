@@ -21,23 +21,23 @@ filesys_init (bool format) {
 	if (filesys_disk == NULL)
 		PANIC ("hd0:1 (hdb) not present, file system initialization failed");
 
-	inode_init ();
+	inode_init();
 
 #ifdef EFILESYS
-	fat_init ();
+	fat_init();
 
 	if (format)
-		do_format ();
+		do_format();
 
-	fat_open ();
+	fat_open();
 #else
 	/* Original FS */
-	free_map_init ();
+	free_map_init();
 
 	if (format)
-		do_format ();
+		do_format();
 
-	free_map_open ();
+	free_map_open();
 #endif
 }
 
@@ -47,9 +47,9 @@ void
 filesys_done (void) {
 	/* Original FS */
 #ifdef EFILESYS
-	fat_close ();
+	fat_close();
 #else
-	free_map_close ();
+	free_map_close();
 #endif
 }
 
@@ -60,7 +60,7 @@ filesys_done (void) {
 bool
 filesys_create (const char *name, off_t initial_size) {
 	disk_sector_t inode_sector = 0;
-	struct dir *dir = dir_open_root ();
+	struct dir *dir = dir_open_root();
 	bool success = (dir != NULL
 			&& free_map_allocate (1, &inode_sector)
 			&& inode_create (inode_sector, initial_size)
@@ -79,7 +79,7 @@ filesys_create (const char *name, off_t initial_size) {
  * or if an internal memory allocation fails. */
 struct file *
 filesys_open (const char *name) {
-	struct dir *dir = dir_open_root ();
+	struct dir *dir = dir_open_root();
 	struct inode *inode = NULL;
 
 	if (dir != NULL)
@@ -95,7 +95,7 @@ filesys_open (const char *name) {
  * or if an internal memory allocation fails. */
 bool
 filesys_remove (const char *name) {
-	struct dir *dir = dir_open_root ();
+	struct dir *dir = dir_open_root();
 	bool success = dir != NULL && dir_remove (dir, name);
 	dir_close (dir);
 
@@ -109,13 +109,13 @@ do_format (void) {
 
 #ifdef EFILESYS
 	/* Create FAT and save it to the disk. */
-	fat_create ();
-	fat_close ();
+	fat_create();
+	fat_close();
 #else
-	free_map_create ();
+	free_map_create();
 	if (!dir_create (ROOT_DIR_SECTOR, 16))
 		PANIC ("root directory creation failed");
-	free_map_close ();
+	free_map_close();
 #endif
 
 	printf ("done.\n");

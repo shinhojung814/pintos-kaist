@@ -200,7 +200,7 @@ __vprintf (const char *format, va_list args,
 								value = value - SIZE_MAX - 1;
 							break;
 						default:
-							NOT_REACHED ();
+							NOT_REACHED();
 					}
 
 					format_integer (value < 0 ? -value : value,
@@ -246,7 +246,7 @@ __vprintf (const char *format, va_list args,
 							value = va_arg (args, size_t);
 							break;
 						default:
-							NOT_REACHED ();
+							NOT_REACHED();
 					}
 
 					switch (*format) {
@@ -254,7 +254,7 @@ __vprintf (const char *format, va_list args,
 						case 'u': b = &base_d; break;
 						case 'x': b = &base_x; break;
 						case 'X': b = &base_X; break;
-						default: NOT_REACHED ();
+						default: NOT_REACHED();
 					}
 
 					format_integer (value, false, false, b, &c, output, aux);

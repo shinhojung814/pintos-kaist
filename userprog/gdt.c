@@ -84,7 +84,7 @@ gdt_init (void) {
 	/* Initialize GDT. */
 	struct segment_descriptor64 *tss_desc =
 		(struct segment_descriptor64 *) &gdt[SEL_TSS >> 3];
-	struct task_state *tss = tss_get ();
+	struct task_state *tss = tss_get();
 
 	*tss_desc = (struct segment_descriptor64) {
 		.lim_15_0 = (uint64_t) (sizeof (struct task_state)) & 0xffff,

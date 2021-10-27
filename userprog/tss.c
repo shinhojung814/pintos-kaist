@@ -55,7 +55,7 @@ tss_init (void) {
 	 * few fields of it are ever referenced, and those are the only
 	 * ones we initialize. */
 	tss = palloc_get_page (PAL_ASSERT | PAL_ZERO);
-	tss_update (thread_current ());
+	tss_update (thread_current());
 }
 
 /* Returns the kernel TSS. */

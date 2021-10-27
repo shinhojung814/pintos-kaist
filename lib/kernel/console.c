@@ -83,7 +83,7 @@ console_print_stats (void) {
 /* Acquires the console lock. */
 	static void
 acquire_console (void) {
-	if (!intr_context () && use_console_lock) {
+	if (!intr_context() && use_console_lock) {
 		if (lock_held_by_current_thread (&console_lock)) 
 			console_lock_depth++; 
 		else
@@ -94,7 +94,7 @@ acquire_console (void) {
 /* Releases the console lock. */
 static void
 release_console (void) {
-	if (!intr_context () && use_console_lock) {
+	if (!intr_context() && use_console_lock) {
 		if (console_lock_depth > 0)
 			console_lock_depth--;
 		else
@@ -106,7 +106,7 @@ release_console (void) {
    false otherwise. */
 static bool
 console_locked_by_current_thread (void) {
-	return (intr_context ()
+	return (intr_context()
 			|| !use_console_lock
 			|| lock_held_by_current_thread (&console_lock));
 }
@@ -118,9 +118,9 @@ int
 vprintf (const char *format, va_list args) {
 	int char_cnt = 0;
 
-	acquire_console ();
+	acquire_console();
 	__vprintf (format, args, vprintf_helper, &char_cnt);
-	release_console ();
+	release_console();
 
 	return char_cnt;
 }
@@ -129,11 +129,11 @@ vprintf (const char *format, va_list args) {
    character. */
 int
 puts (const char *s) {
-	acquire_console ();
+	acquire_console();
 	while (*s != '\0')
 		putchar_have_lock (*s++);
 	putchar_have_lock ('\n');
-	release_console ();
+	release_console();
 
 	return 0;
 }
@@ -141,18 +141,18 @@ puts (const char *s) {
 /* Writes the N characters in BUFFER to the console. */
 void
 putbuf (const char *buffer, size_t n) {
-	acquire_console ();
+	acquire_console();
 	while (n-- > 0)
 		putchar_have_lock (*buffer++);
-	release_console ();
+	release_console();
 }
 
 /* Writes C to the vga display and serial port. */
 int
 putchar (int c) {
-	acquire_console ();
+	acquire_console();
 	putchar_have_lock (c);
-	release_console ();
+	release_console();
 
 	return c;
 }
@@ -170,7 +170,7 @@ vprintf_helper (char c, void *char_cnt_) {
    appropriate. */
 static void
 putchar_have_lock (uint8_t c) {
-	ASSERT (console_locked_by_current_thread ());
+	ASSERT (console_locked_by_current_thread());
 	write_cnt++;
 	serial_putc (c);
 	vga_putc (c);

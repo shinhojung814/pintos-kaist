@@ -103,7 +103,7 @@ void thread_init(void) {
 
 	/* Reload the temporal gdt for the kernel
 	 * This gdt does not include the user context.
-	 * The kernel will rebuild the gdt with user context, in gdt_init (). */
+	 * The kernel will rebuild the gdt with user context, in gdt_init(). */
 	struct desc_ptr gdt_ds = {
 		.size = sizeof(gdt) - 1,
 		.address = (uint64_t)gdt

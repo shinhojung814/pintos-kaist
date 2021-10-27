@@ -135,7 +135,7 @@ keyboard_interrupt (struct intr_frame *args UNUSED) {
 				c += 0x80;
 
 			/* Append to keyboard buffer. */
-			if (!input_full ()) {
+			if (!input_full()) {
 				key_cnt++;
 				input_putc (c);
 			}

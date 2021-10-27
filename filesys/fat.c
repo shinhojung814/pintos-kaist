@@ -47,8 +47,8 @@ fat_init (void) {
 
 	// Extract FAT info
 	if (fat_fs->bs.magic != FAT_MAGIC)
-		fat_boot_create ();
-	fat_fs_init ();
+		fat_boot_create();
+	fat_fs_init();
 }
 
 void
@@ -116,8 +116,8 @@ fat_close (void) {
 void
 fat_create (void) {
 	// Create FAT boot
-	fat_boot_create ();
-	fat_fs_init ();
+	fat_boot_create();
+	fat_fs_init();
 
 	// Create FAT table
 	fat_fs->fat = calloc (fat_fs->fat_length, sizeof (cluster_t));

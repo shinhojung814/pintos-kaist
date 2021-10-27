@@ -429,49 +429,49 @@
 // 	char **argv;
 
 // 	/* Clear BSS and get machine's RAM size. */
-// 	bss_init ();
+// 	bss_init();
 
 // 	/* Break command line into arguments and parse options. */
-// 	argv = read_command_line ();
+// 	argv = read_command_line();
 // 	argv = parse_options (argv);
 
 // 	/* Initialize ourselves as a thread so we can use locks,
 // 	   then enable console locking. */
-// 	thread_init ();
-// 	console_init ();
+// 	thread_init();
+// 	console_init();
 
 // 	/* Initialize memory system. */
-// 	mem_end = palloc_init ();
-// 	malloc_init ();
+// 	mem_end = palloc_init();
+// 	malloc_init();
 // 	paging_init (mem_end);
 
 // #ifdef USERPROG
-// 	tss_init ();
-// 	gdt_init ();
+// 	tss_init();
+// 	gdt_init();
 // #endif
 
 // 	/* Initialize interrupt handlers. */
-// 	intr_init ();
-// 	timer_init ();
-// 	kbd_init ();
-// 	input_init ();
+// 	intr_init();
+// 	timer_init();
+// 	kbd_init();
+// 	input_init();
 // #ifdef USERPROG
-// 	exception_init ();
-// 	syscall_init ();
+// 	exception_init();
+// 	syscall_init();
 // #endif
 // 	/* Start thread scheduler and enable interrupts. */
-// 	thread_start ();
-// 	serial_init_queue ();
-// 	timer_calibrate ();
+// 	thread_start();
+// 	serial_init_queue();
+// 	timer_calibrate();
 
 // #ifdef FILESYS
 // 	/* Initialize file system. */
-// 	disk_init ();
+// 	disk_init();
 // 	filesys_init (format_filesys);
 // #endif
 
 // #ifdef VM
-// 	vm_init ();
+// 	vm_init();
 // #endif
 
 // 	printf ("Boot complete.\n");
@@ -481,8 +481,8 @@
 
 // 	/* Finish up. */
 // 	if (power_off_when_done)
-// 		power_off ();
-// 	thread_exit ();
+// 		power_off();
+// 	thread_exit();
 // }
 
 // /* Clear BSS */
@@ -568,7 +568,7 @@
 // 		char *value = strtok_r (NULL, "", &save_ptr);
 
 // 		if (!strcmp (name, "-h"))
-// 			usage ();
+// 			usage();
 // 		else if (!strcmp (name, "-q"))
 // 			power_off_when_done = true;
 // #ifdef FILESYS
@@ -688,7 +688,7 @@
 // 			"  -ul=COUNT          Limit user memory to COUNT pages.\n"
 // #endif
 // 			);
-// 	power_off ();
+// 	power_off();
 // }
 
 
@@ -697,10 +697,10 @@
 // void
 // power_off (void) {
 // #ifdef FILESYS
-// 	filesys_done ();
+// 	filesys_done();
 // #endif
 
-// 	print_stats ();
+// 	print_stats();
 
 // 	printf ("Powering off...\n");
 // 	outw (0x604, 0x2000);               /* Poweroff command for qemu */
@@ -710,15 +710,15 @@
 // /* Print statistics about Pintos execution. */
 // static void
 // print_stats (void) {
-// 	timer_print_stats ();
-// 	thread_print_stats ();
+// 	timer_print_stats();
+// 	thread_print_stats();
 // #ifdef FILESYS
-// 	disk_print_stats ();
+// 	disk_print_stats();
 // #endif
-// 	console_print_stats ();
-// 	kbd_print_stats ();
+// 	console_print_stats();
+// 	kbd_print_stats();
 // #ifdef USERPROG
-// 	exception_print_stats ();
+// 	exception_print_stats();
 // #endif
 // }
 
@@ -795,49 +795,49 @@ main (void) {
 	char **argv;
 
 	/* Clear BSS and get machine's RAM size. */
-	bss_init ();
+	bss_init();
 
 	/* Break command line into arguments and parse options. */
-	argv = read_command_line ();
+	argv = read_command_line();
 	argv = parse_options (argv);
 
 	/* Initialize ourselves as a thread so we can use locks,
 	   then enable console locking. */
-	thread_init ();
-	console_init ();
+	thread_init();
+	console_init();
 
 	/* Initialize memory system. */
-	mem_end = palloc_init ();
-	malloc_init ();
+	mem_end = palloc_init();
+	malloc_init();
 	paging_init (mem_end);
 
 #ifdef USERPROG
-	tss_init ();
-	gdt_init ();
+	tss_init();
+	gdt_init();
 #endif
 
 	/* Initialize interrupt handlers. */
-	intr_init ();
-	timer_init ();
-	kbd_init ();
-	input_init ();
+	intr_init();
+	timer_init();
+	kbd_init();
+	input_init();
 #ifdef USERPROG
-	exception_init ();
-	syscall_init ();
+	exception_init();
+	syscall_init();
 #endif
 	/* Start thread scheduler and enable interrupts. */
-	thread_start ();
-	serial_init_queue ();
-	timer_calibrate ();
+	thread_start();
+	serial_init_queue();
+	timer_calibrate();
 
 #ifdef FILESYS
 	/* Initialize file system. */
-	disk_init ();
+	disk_init();
 	filesys_init (format_filesys);
 #endif
 
 #ifdef VM
-	vm_init ();
+	vm_init();
 #endif
 
 	printf ("Boot complete.\n");
@@ -847,8 +847,8 @@ main (void) {
 
 	/* Finish up. */
 	if (power_off_when_done)
-		power_off ();
-	thread_exit ();
+		power_off();
+	thread_exit();
 }
 
 /* Clear BSS */
@@ -934,7 +934,7 @@ parse_options (char **argv) {
 		char *value = strtok_r (NULL, "", &save_ptr);
 
 		if (!strcmp (name, "-h"))
-			usage ();
+			usage();
 		else if (!strcmp (name, "-q"))
 			power_off_when_done = true;
 #ifdef FILESYS
@@ -1054,7 +1054,7 @@ usage (void) {
 			"  -ul=COUNT          Limit user memory to COUNT pages.\n"
 #endif
 			);
-	power_off ();
+	power_off();
 }
 
 
@@ -1063,10 +1063,10 @@ usage (void) {
 void
 power_off (void) {
 #ifdef FILESYS
-	filesys_done ();
+	filesys_done();
 #endif
 
-	print_stats ();
+	print_stats();
 
 	printf ("Powering off...\n");
 	outw (0x604, 0x2000);               /* Poweroff command for qemu */
@@ -1076,14 +1076,14 @@ power_off (void) {
 /* Print statistics about Pintos execution. */
 static void
 print_stats (void) {
-	timer_print_stats ();
-	thread_print_stats ();
+	timer_print_stats();
+	thread_print_stats();
 #ifdef FILESYS
-	disk_print_stats ();
+	disk_print_stats();
 #endif
-	console_print_stats ();
-	kbd_print_stats ();
+	console_print_stats();
+	kbd_print_stats();
 #ifdef USERPROG
-	exception_print_stats ();
+	exception_print_stats();
 #endif
 }
