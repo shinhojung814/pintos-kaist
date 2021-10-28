@@ -38,7 +38,7 @@ unsigned tell(int fd);
 void close(int fd);
 int dup2(int old_fd, int new_fd);
 void *mmap(void *addr, size_t size, int writable, int fd, off_t offset);
-void munmap(void *addp);
+void munmap(void *addr);
 
 /* System call.
  *
