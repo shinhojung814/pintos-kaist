@@ -129,6 +129,10 @@ void thread_init(void) {
 		initial_thread -> recent_cpu = 0;
 		load_avg = 0;
 	}
+
+#ifdef EFILESYS
+	initial_thread -> curr_dir = NULL;
+#endif
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -203,6 +207,11 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
 
 	/* Initialize thread. */
 	init_thread(t, name, priority);
+
+#ifdef EFILESYS
+	if (thread_current() -> curr_dir != NULL)
+		t -> curr_dir = dir_reopen(thread_current() -> curr_dir);
+#endif
 
 	t -> fd_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
 

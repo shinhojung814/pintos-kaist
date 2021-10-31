@@ -1,7 +1,10 @@
 /* vm.c: Generic interface for virtual memory objects. */
 
+#include "lib/kernel/hash.h"
 #include "threads/malloc.h"
 #include "userprog/process.h"
+#include "vm/anon.h"
+#include "vm/file.h"
 #include "vm/inspect.h"
 #include "vm/vm.h"
 

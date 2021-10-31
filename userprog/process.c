@@ -457,6 +457,10 @@ void process_exit(void) {
 
 	sema_up(&curr -> wait_sema);
 	sema_down(&curr -> free_sema);
+
+#ifdef EFILESYS
+	dir_close(curr -> curr_dir);
+#endif
 }
 
 /* Free the current process's resources. */

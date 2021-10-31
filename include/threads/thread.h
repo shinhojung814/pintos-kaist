@@ -9,6 +9,7 @@
 #include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
+#include "filesys/directory.h"
 #endif
 
 /* States in a thread's life cycle. */
@@ -142,6 +143,8 @@ struct thread {
 	/* Saved stack pointer on the initial transition from user to kernel mode */
 	void *rsp_stack;
 	void *stack_bottom;
+
+	struct dir *curr_dir;
 #endif
 
 	/* Owned by thread.c. */
