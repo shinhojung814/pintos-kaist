@@ -6,19 +6,6 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 
-/* A directory. */
-struct dir {
-	struct inode *inode;                /* Backing store. */
-	off_t pos;                          /* Current position. */
-};
-
-/* A single directory entry. */
-struct dir_entry {
-	disk_sector_t inode_sector;         /* Sector number of header. */
-	char name[NAME_MAX + 1];            /* Null terminated file name. */
-	bool in_use;                        /* In use or free? */
-};
-
 /* Creates a directory with space for ENTRY_CNT entries in the
  * given SECTOR.  Returns true if successful, false on failure. */
 bool dir_create(disk_sector_t sector, size_t entry_cnt) {
@@ -167,6 +154,9 @@ bool dir_remove(struct dir *dir, const char *name) {
 	ASSERT(dir != NULL);
 	ASSERT(name != NULL);
 
+	if (!strcmp(name, ".") || !strcmp(name, ".."))
+		goto done;
+	
 	/* Find directory entry. */
 	if (!lookup(dir, name, &e, &ofs))
 		goto done;
@@ -175,6 +165,9 @@ bool dir_remove(struct dir *dir, const char *name) {
 	inode = inode_open(e.inode_sector);
 
 	if (inode == NULL)
+		goto done;
+	
+	if (inode -> open_cnt > 2)
 		goto done;
 
 	/* Erase directory entry. */
@@ -208,4 +201,11 @@ bool dir_readdir(struct dir *dir, char name[NAME_MAX + 1]) {
 	}
 	
 	return false;
+}
+
+void dir_seek(struct dir *dir, off_t new_pos) {
+	ASSERT(dir != NULL);
+	ASSERT(new_pos >= 0);
+
+	dir -> pos = new_pos;
 }

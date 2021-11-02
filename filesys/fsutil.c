@@ -119,6 +119,7 @@ void fsutil_put(char **argv) {
 		PANIC("%s: create failed", file_name);
 
 	dst = filesys_open (file_name);
+
 	if (dst == NULL)
 		PANIC("%s: open failed", file_name);
 
@@ -129,8 +130,7 @@ void fsutil_put(char **argv) {
 		disk_read(src, sector++, buffer);
 
 		if (file_write(dst, buffer, chunk_size) != chunk_size)
-			PANIC("%s: write failed with %"PROTd" bytes unwritten",
-					file_name, size);
+			PANIC("%s: write failed with %"PROTd" bytes unwritten", file_name, size);
 		
 		size -= chunk_size;
 	}
@@ -164,23 +164,28 @@ void fsutil_get(char **argv) {
 
 	/* Allocate buffer. */
 	buffer = malloc(DISK_SECTOR_SIZE);
+
 	if (buffer == NULL)
 		PANIC("couldn't allocate buffer");
 
 	/* Open source file. */
 	src = filesys_open(file_name);
+
 	if (src == NULL)
 		PANIC("%s: open failed", file_name);
+	
 	size = file_length(src);
 
 	/* Open target disk. */
 	dst = disk_get(1, 0);
+
 	if (dst == NULL)
 		PANIC("couldn't open target disk (hdc or hd1:0)");
 
 	/* Write size to sector 0. */
 	memset(buffer, 0, DISK_SECTOR_SIZE);
 	memcpy(buffer, "GET", 4);
+
 	((int32_t *)buffer)[1] = size;
 	disk_write(dst, sector++, buffer);
 
@@ -189,8 +194,8 @@ void fsutil_get(char **argv) {
 		int chunk_size = size > DISK_SECTOR_SIZE ? DISK_SECTOR_SIZE : size;
 
 		if (sector >= disk_size(dst))
-
 			PANIC("%s: out of space on scratch disk", file_name);
+		
 		if (file_read(src, buffer, chunk_size) != chunk_size)
 			PANIC("%s: read failed with %"PROTd" bytes unread", file_name, size);
 		

@@ -256,7 +256,6 @@ static void __do_fork(void *aux) {
 
 	if (!supplemental_page_table_copy(&curr -> spt, &parent -> spt))
 		goto error;
-
 #else
 	if (!pml4_for_each(parent -> pml4, duplicate_pte, parent))
 		goto error;
@@ -522,13 +521,18 @@ static bool load(const char *file_name, struct intr_frame *if_) {
 	
 	process_activate(thread_current());
 
+	lock_acquire(&filesys_lock);
+
 	/* Open executable file. */
 	file = filesys_open(file_name);
 
 	if (file == NULL) {
+		lock_release(&filesys_lock);
 		printf("load: %s: open failed\n", file_name);
 		goto done;
 	}
+
+	lock_release(&filesys_lock);
 
 	curr -> running = file;
 	file_deny_write(file);

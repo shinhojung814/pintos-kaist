@@ -1,6 +1,8 @@
 #include <list.h>
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "filesys/fat.h"
+#include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "threads/flags.h"
@@ -13,10 +15,12 @@
 #include "userprog/process.h"
 #include "userprog/syscall.h"
 #include "intrinsic.h"
+#include "string.h"
 
 const int STDIN = 1;
 const int STDOUT = 2;
 
+void syscall_init(void);
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
 
@@ -24,21 +28,6 @@ static struct file *find_file_by_fd(int fd);
 
 struct page *check_address(void *addr);
 void check_valid_buffer(void *buffer, unsigned size, void *rsp, bool to_write);
-
-void halt(void);
-void exit(int status);
-bool create(const char *file, unsigned initial_size);
-bool remove(const char *file);
-int open(const char *file);
-int filesize(int fd);
-int read(int fd, void *buffer, unsigned size);
-int write(int fd, const void *buffer, unsigned size);
-void seek(int fd, unsigned position);
-unsigned tell(int fd);
-void close(int fd);
-int dup2(int old_fd, int new_fd);
-void *mmap(void *addr, size_t size, int writable, int fd, off_t offset);
-void munmap(void *addr);
 
 /* System call.
  *
@@ -62,13 +51,15 @@ void syscall_init(void) {
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK, FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 
-	lock_init(&file_lock);
+	lock_init(&filesys_lock);
 }
 
 void syscall_handler(struct intr_frame *f) {
 #ifdef VM
 	thread_current() -> rsp_stack = f -> rsp;
 #endif
+
+	uint64_t number = f -> R.rax;
 
 	switch (f -> R.rax) {
 		case SYS_HALT:
@@ -80,6 +71,7 @@ void syscall_handler(struct intr_frame *f) {
 			break;
 
 		case SYS_FORK:
+			// memcpy(&thread_current() -> fork_tf, f, sizeof(struct intr_frame));
 			f -> R.rax = fork(f -> R.rdi, f);
 			break;
 
@@ -139,6 +131,30 @@ void syscall_handler(struct intr_frame *f) {
 		
 		case SYS_MUNMAP:
 			munmap(f -> R.rdi);
+			break;
+		
+		case SYS_ISDIR:
+			f -> R.rax = is_dir(f -> R.rdi);
+			break;
+		
+		case SYS_CHDIR:
+			f -> R.rax = sys_chdir(f -> R.rdi);
+			break;
+		
+		case SYS_MKDIR:
+			f -> R.rax = sys_mkdir(f -> R.rdi);
+			break;
+		
+		case SYS_READDIR:
+			f -> R.rax = sys_readdir(f -> R.rdi, f -> R.rsi);
+			break;
+		
+		case SYS_INUMBER:
+			f -> R.rax = sys_inumber(f -> R.rdi);
+			break;
+		
+		case SYS_SYMLINK:
+			f -> R.rax = symlink(f -> R.rdi, f -> R.rsi);
 			break;
 		
 		default:
@@ -278,6 +294,8 @@ int filesize(int fd) {
 }
 
 int read(int fd, void *buffer, unsigned size) {
+	lock_acquire(&filesys_lock);
+
 	struct thread *curr = thread_current();
 	struct file *file_object = find_file_by_fd(fd);
 	int ret;
@@ -316,10 +334,13 @@ int read(int fd, void *buffer, unsigned size) {
 		lock_release(&file_lock);
 	}
 
+	lock_release(&filesys_lock);
 	return ret;
 }
 
 int write(int fd, const void *buffer, unsigned size) {
+	lock_acquire(&filesys_lock);
+
 	struct file *file_object = find_file_by_fd(fd);
 	int ret;
 
@@ -351,6 +372,7 @@ int write(int fd, const void *buffer, unsigned size) {
 		lock_release(&file_lock);
 	}
 
+	lock_release(&filesys_lock);
 	return ret;
 }
 
@@ -453,4 +475,125 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset) {
 
 void munmap(void *addr) {
 	do_munmap(addr);
+}
+
+bool is_dir(int fd) {
+	struct file *target = find_file_by_fd(fd);
+
+	if (target == NULL)
+		return false;
+	
+	return inode_is_dir(file_get_inode(target));
+}
+
+bool sys_chdir(const char *path_name) {
+	if (path_name == NULL)
+		return false;
+	
+	char *cp_name = (char *)malloc(strlen(path_name) + 1);
+
+	strlcpy(cp_name, path_name, strlen(path_name) + 1);
+
+	struct dir *chdir = NULL;
+
+	if (cp_name[0] == '/')
+		chdir = dir_open_root();
+	
+	else
+		chdir = dir_reopen(thread_current() -> curr_dir);
+	
+	struct inode *inode = NULL;
+	char *token, *next_token, *save_ptr;
+
+	token = strtok_r(cp_name, "/", &save_ptr);
+
+	while (token != NULL) {
+		if (!dir_lookup(chdir, token, &inode)) {
+			dir_close(chdir);
+
+			return false;
+		}
+
+		if (!inode_is_dir(inode)) {
+			dir_close(chdir);
+
+			return false;
+		}
+
+		dir_close(chdir);
+		chdir = dir_open(inode);
+		token = strtok_r(NULL, "/", &save_ptr);
+	}
+
+	dir_close(thread_current() -> curr_dir);
+	thread_current() -> curr_dir = chdir;
+	free(cp_name);
+
+	return true;
+}
+
+bool sys_mkdir(const char *dir) {
+	lock_acquire(&filesys_lock);
+
+	bool tmp = filesys_create_dir(dir);
+
+	lock_release(&filesys_lock);
+
+	return tmp;
+}
+
+bool sys_readdir(int fd, char *name) {
+	if (name == NULL)
+		return false;
+	
+	struct file *target = find_file_by_fd(fd);
+
+	if (target == NULL)
+		return false;
+	
+	if (!inode_is_dir(file_get_inode(target)))
+		return false;
+	
+	struct dir *p_file = target;
+
+	if (p_file -> pos == 0)
+		dir_seek(p_file, 2 * sizeof(struct dir_entry));
+	
+	bool result = dir_readdir(p_file, name);
+
+	return result;
+}
+
+struct cluster_t *sys_inumber(int fd) {
+	struct file *target = find_file_by_fd(fd);
+
+	if (target == NULL)
+		return false;
+	
+	return inode_get_inumber(file_get_inode(target));
+}
+
+int symlink(const char *target, const char *link_path) {
+	bool success = false;
+	char *cp_link = (char *)malloc(strlen(link_path) + 1);
+
+	strlcpy(cp_link, link_path, strlen(link_path) + 1);
+
+	char *file_link = (char *)malloc(strlen(cp_link) + 1);
+	struct dir *dir = parse_path(cp_link, file_link);
+
+	cluster_t inode_cluster = fat_create_chain(0);
+
+	success = (dir != NULL
+			&& link_inode_create(inode_cluster, target)
+			&& dir_add(dir, file_link, inode_cluster));
+	
+	if (!success && inode_cluster != 0)
+		fat_remove_chain(inode_cluster, 0);
+	
+	dir_close(dir);
+	free(cp_link);
+	free(file_link);
+
+	return success - 1;
 }

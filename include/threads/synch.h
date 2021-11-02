@@ -24,6 +24,8 @@ struct lock {
 	struct semaphore semaphore; /* Binary semaphore controlling access. */
 };
 
+struct lock filesys_lock;
+
 void lock_init(struct lock *lock);
 void lock_acquire(struct lock *lock);
 bool lock_try_acquire(struct lock *lock);

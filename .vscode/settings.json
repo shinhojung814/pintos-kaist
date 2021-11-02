@@ -14,7 +14,8 @@
         "anon.h": "c",
         "process.h": "c",
         "off_t.h": "c",
-        "malloc.h": "c"
+        "malloc.h": "c",
+        "interrupt.h": "c"
     },
     "C_Cpp.errorSquiggles": "Disabled"
 }
